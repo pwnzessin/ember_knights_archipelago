@@ -18,6 +18,8 @@
     <Compile Include="..\..\src\EmberKnights.Archipelago\RoomProgressTracker.cs" Link="RoomProgressTracker.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\RelicOrbPolicy.cs" Link="RelicOrbPolicy.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\UpgradeTooltip.cs" Link="UpgradeTooltip.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\LogBuffer.cs" Link="LogBuffer.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\FocusFade.cs" Link="FocusFade.cs" />
     <EmbeddedResource Include="..\..\apworld\ember_knights\catalog.json" LogicalName="EmberKnights.Archipelago.catalog.json" />
   </ItemGroup>
 </Project>

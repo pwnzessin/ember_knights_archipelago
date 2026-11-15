@@ -7,6 +7,8 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
 {
     private float startedAt;
     private bool autoConnectAttempted;
+    private HudLogWindow? hudWindow;
+    private bool sinkAttached;
 
     public ArchipelagoBehaviour(IntPtr pointer) : base(pointer)
     {
@@ -24,6 +26,7 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
             return;
 
         plugin.Service.PumpMainThread();
+        TickHudWindow();
         if (Input.GetKeyDown(KeyCode.F6))
             plugin.Service.Connect();
         if (Input.GetKeyDown(KeyCode.F7))
@@ -36,10 +39,64 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Keeps the HUD log window fed and current. The window is only created when the config asks for it, and is
+    /// dropped for good if it ever fails, in which case OnGUI keeps drawing the original box.
+    /// </summary>
+    private void TickHudWindow()
+    {
+        var plugin = ArchipelagoPlugin.Instance;
+        if (plugin?.Service is null)
+            return;
+        if (!plugin.HudLogWindowEnabled.Value)
+        {
+            if (hudWindow is not null && sinkAttached)
+            {
+                plugin.Service.LogSink = null;
+                sinkAttached = false;
+            }
+            hudWindow = null;
+            return;
+        }
+
+        if (hudWindow is null)
+        {
+            hudWindow = new HudLogWindow();
+            // Start from what the overlay already holds so the window is not empty the first time it opens.
+            foreach (var line in plugin.Service.RecentMessages)
+                hudWindow.Add(line);
+        }
+
+        if (!sinkAttached)
+        {
+            plugin.Service.LogSink = hudWindow.Add;
+            sinkAttached = true;
+        }
+
+        hudWindow.Configure(plugin.HudLogScale.Value, plugin.HudLogHoldSeconds.Value, plugin.HudLogIdleOpacity.Value);
+        hudWindow.Tick(BuildStatusLine(), visible: true);
+    }
+
+    private static string BuildStatusLine()
+    {
+        var plugin = ArchipelagoPlugin.Instance;
+        var service = plugin.Service;
+        var statusHex = service.IsConnected ? "#3DD68C" : service.IsActive ? "#F2AB3B" : "#8A93A6";
+        var statusWord = service.IsConnected ? "ONLINE" : service.IsActive ? "RECONNECT (F6)" : "OFFLINE (F6)";
+        var goalLabel = service.Goal == "arch_praxis" ? "Arch Praxis" : "Praxis";
+        var dlBadge = service.DeathLinkEnabled ? "  <color=#E06C75>DL</color>" : "";
+        var queueBadge = service.PendingCheckCount > 0 ? $"  <color=#F2AB3B>Q:{service.PendingCheckCount}</color>" : "";
+        return $"<b>AP</b> {plugin.SlotName.Value}  <color={statusHex}><b>{statusWord}</b></color>   " +
+               $"Heat <b>{service.ActiveHeat}</b>/{service.StartHeat}  Coins <b>{service.AvailableArchipelagoCoins}</b>/{service.ArchipelagoCoinsReceived}  {goalLabel}{dlBadge}{queueBadge}";
+    }
+
     private void OnGUI()
     {
         var plugin = ArchipelagoPlugin.Instance;
         if (plugin?.Service is null)
+            return;
+        // The HUD window replaces this box while it is up. If it fails or cannot be built, this box stays.
+        if (hudWindow is { IsShowing: true })
             return;
         var service = plugin.Service;
 

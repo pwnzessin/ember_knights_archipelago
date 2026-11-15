@@ -30,6 +30,10 @@ public sealed class ArchipelagoPlugin : BasePlugin
     public ConfigEntry<bool> RelicDiagnosticsEnabled { get; private set; } = null!;
     public ConfigEntry<bool> PraxisDiagnosticsEnabled { get; private set; } = null!;
     public ConfigEntry<bool> CoinIconEnabled { get; private set; } = null!;
+    public ConfigEntry<bool> HudLogWindowEnabled { get; private set; } = null!;
+    public ConfigEntry<float> HudLogScale { get; private set; } = null!;
+    public ConfigEntry<float> HudLogHoldSeconds { get; private set; } = null!;
+    public ConfigEntry<float> HudLogIdleOpacity { get; private set; } = null!;
 
     private Harmony? harmony;
 
@@ -72,6 +76,34 @@ public sealed class ArchipelagoPlugin : BasePlugin
             "archipelago_coin_icon",
             true,
             "Replace the Ember icon with the Archipelago coin while connected. The original icon returns on disconnect.");
+        HudLogWindowEnabled = Config.Bind(
+            "Visuals",
+            "hud_log_window",
+            false,
+            "Show the Archipelago log in a window drawn on the game's own HUD instead of the plain overlay box. " +
+            "Experimental. It is drawn locally on each player's screen only and sends nothing over the game's network.");
+        HudLogScale = Config.Bind(
+            "Visuals",
+            "hud_log_scale",
+            0.7f,
+            new ConfigDescription(
+                "Size of the HUD log window. 1.0 is the original size, smaller values shrink it.",
+                new AcceptableValueRange<float>(0.4f, 1.5f)));
+        HudLogHoldSeconds = Config.Bind(
+            "Visuals",
+            "hud_log_hold_seconds",
+            6f,
+            new ConfigDescription(
+                "How long the HUD log window stays in focus after a new message before it fades away.",
+                new AcceptableValueRange<float>(1f, 60f)));
+        HudLogIdleOpacity = Config.Bind(
+            "Visuals",
+            "hud_log_idle_opacity",
+            0f,
+            new ConfigDescription(
+                "How visible the HUD log window stays when there is no new message. 0 hides it completely, " +
+                "0.3 leaves it faintly visible.",
+                new AcceptableValueRange<float>(0f, 1f)));
         PraxisDiagnosticsEnabled = Config.Bind(
             "Diagnostics",
             "praxis_diagnostics",

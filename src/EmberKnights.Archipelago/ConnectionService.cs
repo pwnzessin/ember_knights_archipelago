@@ -58,6 +58,9 @@ public sealed class ConnectionService
     public string StatusText { get; private set; } = "Disconnected";
     public IReadOnlyList<string> RecentMessages => recentMessages;
 
+    /// <summary>Receives every line that reaches the log, for the HUD window to keep its own longer history.</summary>
+    public Action<string>? LogSink { get; set; }
+
     public string LastMessage
     {
         get => lastMessage;
@@ -66,6 +69,7 @@ public sealed class ConnectionService
             if (string.IsNullOrWhiteSpace(value))
                 return;
             lastMessage = value;
+            LogSink?.Invoke(value);
             if (recentMessages.Count > 0 && string.Equals(recentMessages[^1], value, StringComparison.Ordinal))
                 return;
             if (recentMessages.Count >= 5)

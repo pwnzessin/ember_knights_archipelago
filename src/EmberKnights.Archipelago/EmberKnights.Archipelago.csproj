@@ -25,6 +25,8 @@
     <Reference Include="UnityEngine"><HintPath>..\..\tools\interop\assemblies\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>..\..\tools\interop\assemblies\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.InputLegacyModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.TextMeshPro"><HintPath>..\..\tools\interop\assemblies\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TextCoreFontEngineModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.TextCoreFontEngineModule.dll</HintPath><Private>false</Private></Reference>

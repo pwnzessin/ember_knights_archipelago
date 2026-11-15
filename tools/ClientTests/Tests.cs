@@ -1064,3 +1064,237 @@ public class StandardSkillTests
         Assert.Null(StandardSkillPolicy.ReadStartingSkills(5L, IsStandard));
     }
 }
+
+public class LogBufferTests
+{
+    [Fact]
+    public void AddsLinesAndIgnoresBlankOnes()
+    {
+        var buffer = new LogBuffer(10);
+        Assert.True(buffer.Add("Connected."));
+        Assert.False(buffer.Add(null));
+        Assert.False(buffer.Add(""));
+        Assert.False(buffer.Add("   "));
+        Assert.Equal(1, buffer.Count);
+    }
+
+    [Fact]
+    public void DropsALineIdenticalToTheNewestButKeepsAnEarlierRepeat()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("Received 5 Ash.");
+        Assert.False(buffer.Add("Received 5 Ash."));
+        buffer.Add("Check: Ember Tree: Thick Skin");
+        Assert.True(buffer.Add("Received 5 Ash."));
+        Assert.Equal(3, buffer.Count);
+    }
+
+    [Fact]
+    public void DiscardsTheOldestLineOnceFull()
+    {
+        var buffer = new LogBuffer(3);
+        foreach (var line in new[] { "one", "two", "three", "four" })
+            buffer.Add(line);
+        Assert.Equal(3, buffer.Count);
+        Assert.Equal(new[] { "two", "three", "four" }, buffer.VisibleRows(10, 40));
+    }
+
+    [Fact]
+    public void VersionChangesOnlyWhenTheContentChanges()
+    {
+        var buffer = new LogBuffer(5);
+        var start = buffer.Version;
+        buffer.Add("a");
+        Assert.NotEqual(start, buffer.Version);
+        var afterAdd = buffer.Version;
+        buffer.Add("a");
+        buffer.Add("");
+        Assert.Equal(afterAdd, buffer.Version);
+        buffer.Clear();
+        Assert.NotEqual(afterAdd, buffer.Version);
+        var afterClear = buffer.Version;
+        buffer.Clear();
+        Assert.Equal(afterClear, buffer.Version);
+    }
+
+    [Fact]
+    public void ShowsTheNewestLinesWhenMoreThanFit()
+    {
+        var buffer = new LogBuffer(20);
+        for (var i = 1; i <= 8; i++)
+            buffer.Add($"line {i}");
+        Assert.Equal(new[] { "line 6", "line 7", "line 8" }, buffer.VisibleRows(3, 40));
+    }
+
+    [Fact]
+    public void WrapsLongLinesAtWordBoundaries()
+    {
+        var rows = LogBuffer.Wrap("Hookshot for Link was found at Scoggfirth Room 3 Reached", 20);
+        Assert.All(rows, row => Assert.True(row.Length <= 20, row));
+        Assert.Equal("Hookshot for Link was found at Scoggfirth Room 3 Reached", string.Join(" ", rows));
+    }
+
+    [Fact]
+    public void SplitsAWordLongerThanARow()
+    {
+        var rows = LogBuffer.Wrap("Supercalifragilisticexpialidocious", 10);
+        Assert.All(rows, row => Assert.True(row.Length <= 10, row));
+        Assert.Equal("Supercalifragilisticexpialidocious", string.Concat(rows));
+    }
+
+    [Fact]
+    public void ANewestLineThatWrapsStillAppearsInFull()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("old line");
+        buffer.Add("a rather long message that needs three rows");
+        var rows = buffer.VisibleRows(4, 20);
+        Assert.True(rows.Count <= 4);
+        Assert.Equal("a rather long message that needs three rows", string.Join(" ", rows.Skip(rows.Count - 3)));
+        Assert.Equal("old line", rows[0]);
+    }
+
+    [Fact]
+    public void WhenTheWindowIsTooSmallForTheNewestLineItsStartIsKept()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("alpha beta gamma delta epsilon zeta eta theta iota kappa");
+        var rows = buffer.VisibleRows(2, 12);
+        Assert.Equal(2, rows.Count);
+        Assert.StartsWith("alpha beta", rows[0]);
+    }
+
+    [Fact]
+    public void NeverReturnsMoreRowsThanAskedForAndAnEmptyBufferGivesNone()
+    {
+        Assert.Empty(new LogBuffer(5).VisibleRows(5, 30));
+        var buffer = new LogBuffer(50);
+        for (var i = 0; i < 40; i++)
+            buffer.Add($"message number {i} with some padding text to make it wrap around");
+        Assert.True(buffer.VisibleRows(6, 24).Count <= 6);
+    }
+
+    [Fact]
+    public void TinyOrNonsenseDimensionsAreClamped()
+    {
+        var buffer = new LogBuffer(5);
+        buffer.Add("hello world");
+        Assert.NotEmpty(buffer.VisibleRows(0, 0));
+        Assert.NotEmpty(buffer.VisibleRows(-3, -3));
+        Assert.Equal(1, new LogBuffer(0).Count + 1);
+    }
+}
+
+public class FocusFadeTests
+{
+    [Fact]
+    public void StartsHiddenAndStaysHiddenWithoutMessages()
+    {
+        var fade = new FocusFade(holdSeconds: 5f, fadeInSeconds: 0.2f, fadeOutSeconds: 1f);
+        Assert.False(fade.IsVisible);
+        for (var t = 0f; t <= 30f; t += 0.5f)
+            Assert.Equal(0f, fade.Tick(t));
+    }
+
+    [Fact]
+    public void ANewMessageBringsTheWindowToFullOpacityAndHoldsIt()
+    {
+        var fade = new FocusFade(5f, 0.2f, 1f);
+        fade.Tick(0f);
+        fade.Poke(0f);
+        fade.Tick(0.1f);
+        Assert.InRange(fade.Alpha, 0.01f, 0.99f);
+        fade.Tick(0.3f);
+        Assert.Equal(1f, fade.Alpha);
+        fade.Tick(4.9f);
+        Assert.Equal(1f, fade.Alpha);
+    }
+
+    [Fact]
+    public void FadesOutAfterTheHoldAndThenIsHidden()
+    {
+        var fade = new FocusFade(5f, 0f, 1f);
+        fade.Poke(0f);
+        fade.Tick(0f);
+        fade.Tick(5f);
+        Assert.Equal(1f, fade.Alpha);
+        fade.Tick(5.5f);
+        Assert.InRange(fade.Alpha, 0.01f, 0.99f);
+        fade.Tick(7f);
+        Assert.Equal(0f, fade.Alpha);
+        Assert.False(fade.IsVisible);
+    }
+
+    [Fact]
+    public void AMessageDuringTheFadeOutBringsItBackWithoutWaitingForItToFinish()
+    {
+        var fade = new FocusFade(2f, 0.2f, 2f);
+        fade.Poke(0f);
+        // Step through time in frame-sized steps, as the game does, so the fade is caught part way through.
+        for (var t = 0f; t <= 3f; t += 0.1f)
+            fade.Tick(t);
+        var midFade = fade.Alpha;
+        Assert.InRange(midFade, 0.01f, 0.99f);
+        fade.Poke(3.05f);
+        fade.Tick(3.15f);
+        Assert.True(fade.Alpha > midFade);
+        for (var t = 3.25f; t <= 3.6f; t += 0.1f)
+            fade.Tick(t);
+        Assert.Equal(1f, fade.Alpha);
+    }
+
+    [Fact]
+    public void EachMessageRestartsTheHold()
+    {
+        var fade = new FocusFade(3f, 0f, 0f);
+        fade.Poke(0f);
+        fade.Tick(2f);
+        fade.Poke(2f);
+        Assert.Equal(1f, fade.Tick(4.9f));
+        Assert.Equal(0f, fade.Tick(5.1f));
+    }
+
+    [Fact]
+    public void ARestingOpacityKeepsTheWindowFaintlyVisible()
+    {
+        var fade = new FocusFade(1f, 0f, 0f, restingAlpha: 0.25f);
+        Assert.Equal(0.25f, fade.Alpha);
+        Assert.True(fade.IsVisible);
+        fade.Poke(0f);
+        Assert.Equal(1f, fade.Tick(0.5f));
+        Assert.Equal(0.25f, fade.Tick(2f));
+    }
+
+    [Fact]
+    public void ZeroLengthFadesSwitchInstantly()
+    {
+        var fade = new FocusFade(1f, 0f, 0f);
+        fade.Poke(0f);
+        Assert.Equal(1f, fade.Tick(0f));
+        Assert.Equal(0f, fade.Tick(1.5f));
+    }
+
+    [Fact]
+    public void PinShowsAtOnceAndNegativeOrNonsenseInputsAreClamped()
+    {
+        var fade = new FocusFade(-4f, -1f, -1f, restingAlpha: 9f);
+        Assert.Equal(1f, fade.Alpha);
+        var other = new FocusFade(2f, 0.5f, 0.5f);
+        other.Pin(10f);
+        Assert.Equal(1f, other.Alpha);
+        Assert.Equal(1f, other.Tick(11f));
+        Assert.True(other.Tick(14f) < 1f);
+    }
+
+    [Fact]
+    public void AClockThatGoesBackwardsDoesNotMoveTheFade()
+    {
+        var fade = new FocusFade(5f, 1f, 1f);
+        fade.Poke(10f);
+        fade.Tick(10f);
+        fade.Tick(10.5f);
+        var before = fade.Alpha;
+        fade.Tick(9f);
+        Assert.Equal(before, fade.Alpha);
+    }
+}
