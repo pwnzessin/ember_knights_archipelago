@@ -93,17 +93,20 @@ class HeatReroll(Choice):
 
 
 class RelicOrbChecks(Choice):
-    """When a Relic Orb location check is sent.
+    """Retired option, kept only so existing YAML files still work. It no longer changes anything.
 
-    - on_esper_turn_in: Orbs are carried like in the base game. After dying you respawn in the hub, and the
-      check is sent when you hand your orbs to Esper (default).
-    - on_pickup: The check is sent the moment you pick the orb up during a run.
-    Relics themselves are always received as multiworld items, never from Esper.
+    A Relic Orb check is always sent the moment you pick the orb up. You still carry the orb back and hand it to
+    Esper as usual, and her reveal shows the real item that orb's location holds (the relic itself when it is one
+    of yours, otherwise a message naming the item and the player it is for).
+
+    Both values behave the same. This option may be removed in a future version.
     """
 
-    display_name = "Relic Orb Checks"
-    option_on_esper_turn_in = 0
-    option_on_pickup = 1
+    display_name = "Relic Orb Checks (retired)"
+    option_on_pickup = 0
+    option_on_esper_turn_in = 1
+    alias_pickup = 0
+    alias_esper = 1
     default = 0
 
 
@@ -130,6 +133,24 @@ class ExtraStartingWeapons(Range):
     range_start = 0
     range_end = 6
     default = 1
+
+
+class StartingStandardSkills(Range):
+    """How many of the seven standard skills you start with, chosen at random.
+
+    The standard skills are the ones every run has in the base game: Inferno, Bomb, Missile, Chakram,
+    Frost Wall, Furious Charge and Cloak and Dagger. You start with this many of them, picked at random
+    for your seed. The rest are no longer free: they become items found in the multiworld, next to the
+    ten tablet skills.
+
+    Set to 7 to keep all standard skills from the start, as in the base game. The minimum is 3 so a run
+    always has real skills to choose from.
+    """
+
+    display_name = "Starting Standard Skills"
+    range_start = 3
+    range_end = 7
+    default = 3
 
 
 class AshFillerAmount(Range):
@@ -172,6 +193,7 @@ class EmberKnightsOptions(PerGameCommonOptions):
     relic_orb_checks: RelicOrbChecks
     starting_archipelago_coins: StartingArchipelagoCoins
     extra_starting_weapons: ExtraStartingWeapons
+    starting_standard_skills: StartingStandardSkills
     ash_filler_amount: AshFillerAmount
     traps: Traps
     death_link: DeathLink

@@ -5,7 +5,7 @@ from rule_builder.rules import Has
 from worlds.AutoWorld import World
 
 from .catalog import CATALOG
-from .options import EmberKnightsOptions, Goal, HeatMode, HeatReroll, RelicOrbChecks
+from .options import EmberKnightsOptions, Goal, HeatMode, HeatReroll
 
 
 class EmberKnightsItem(Item):
@@ -31,7 +31,8 @@ class EmberKnightsWorld(World):
     item_name_to_id = CATALOG.item_name_to_id
     location_name_to_id = CATALOG.location_name_to_id
     item_name_groups = {
-        "Skills": {skill.name for skill in CATALOG.skills},
+        "Skills": {skill.name for skill in CATALOG.skills} | {skill.name for skill in CATALOG.standard_skills},
+        "Standard Skills": {skill.name for skill in CATALOG.standard_skills},
         "Weapons": {weapon.name for weapon in CATALOG.weapons},
         "Relics": {orb.name for orb in CATALOG.relic_orbs},
         "Heat": {CATALOG.heat_reduction_item_name},
@@ -58,6 +59,7 @@ class EmberKnightsWorld(World):
     def __init__(self, multiworld: Any, player: int) -> None:
         super().__init__(multiworld, player)
         self.starting_weapon_ids: list[int] = [1]
+        self.starting_standard_skill_ids: list[int] = []
 
     def generate_early(self) -> None:
         extra_count = max(0, min(len(CATALOG.weapons), int(self.options.extra_starting_weapons)))
@@ -65,6 +67,13 @@ class EmberKnightsWorld(World):
         self.starting_weapon_ids = [1, *sorted(weapon.weapon_id for weapon in chosen)]
         for weapon in chosen:
             self.multiworld.push_precollected(self.create_item(weapon.name))
+
+        # Pick which standard skills this seed starts with. The others become items in the pool.
+        skill_count = max(3, min(len(CATALOG.standard_skills), int(self.options.starting_standard_skills)))
+        chosen_skills = self.random.sample(CATALOG.standard_skills, skill_count)
+        self.starting_standard_skill_ids = sorted(skill.ability_id for skill in chosen_skills)
+        for skill in chosen_skills:
+            self.multiworld.push_precollected(self.create_item(skill.name))
 
     def create_item(self, name: str) -> EmberKnightsItem:
         classification = ItemClassification.filler
@@ -187,6 +196,9 @@ class EmberKnightsWorld(World):
     def create_items(self) -> None:
         permanent_items = [skill.name for skill in CATALOG.skills]
         permanent_items.extend(
+            skill.name for skill in CATALOG.standard_skills if skill.ability_id not in self.starting_standard_skill_ids
+        )
+        permanent_items.extend(
             weapon.name for weapon in CATALOG.weapons if weapon.weapon_id not in self.starting_weapon_ids
         )
         permanent_items.extend(orb.name for orb in CATALOG.relic_orbs)
@@ -236,14 +248,17 @@ class EmberKnightsWorld(World):
             "heat_reduction_per_item",
             "starting_archipelago_coins",
             "extra_starting_weapons",
+            "starting_standard_skills",
             "ash_filler_amount",
             "traps",
         )
         slot_data["starting_weapon_ids"] = list(self.starting_weapon_ids)
+        # Presence of this key tells the client the standard skills are gated by this seed. Seeds generated before
+        # the option existed lack it, and the client then keeps every standard skill unlocked as in the base game.
+        slot_data["starting_standard_skill_ids"] = list(self.starting_standard_skill_ids)
         slot_data["heat_reroll"] = "once" if self.options.heat_reroll == HeatReroll.option_once else "every_run"
-        slot_data["relic_orb_checks"] = (
-            "on_pickup" if self.options.relic_orb_checks == RelicOrbChecks.option_on_pickup else "on_esper_turn_in"
-        )
+        # Retired: orb checks are always sent at pickup now. The key is still written so older clients read a value.
+        slot_data["relic_orb_checks"] = "on_pickup"
         # heat_mode is the single source of truth for how heat is chosen, including whether the curated tiers apply.
         if self.options.heat_mode == HeatMode.option_sequential:
             slot_data["heat_mode"] = "sequential"
@@ -252,5 +267,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.0.0"
+        slot_data["mod_version"] = "1.1.0"
         return slot_data

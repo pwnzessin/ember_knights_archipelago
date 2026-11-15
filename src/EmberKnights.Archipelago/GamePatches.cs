@@ -45,8 +45,9 @@ internal static class RelicOrbPickupPatch
         {
             var service = ArchipelagoPlugin.Instance.Service;
             // Only the 53 base-game orbs are randomized; DLC orbs and anything else keep vanilla behavior.
-            // When checks are sent at Esper's turn-in, the pickup itself reports nothing.
-            if (!__result || !service.ShouldCheckRelicOrbOnPickup || DropCMP is null ||
+            // The check is sent the moment the orb is picked up. The orb itself still goes into the save's pending
+            // list (nothing suppresses that), so Esper can identify it later.
+            if (!__result || !service.IsActive || DropCMP is null ||
                 !GameCatalog.Data.IsOrbRelic(DropCMP.UnknownRelicDefId))
                 return;
             if (DropENT is not null && !ConsumedDrops.Add(DropENT.Pointer))
@@ -76,45 +77,6 @@ internal static class SkillTabletRunStatGuardPatch
         catch (Exception exception)
         {
             PatchSafety.Report("AddSkillTabletCollected", exception);
-            return true;
-        }
-    }
-}
-
-[HarmonyPatch(typeof(GameCode.XGameState), nameof(GameCode.XGameState.AddUnknownRelicCollected))]
-internal static class UnknownRelicRunStatGuardPatch
-{
-    [HarmonyPrefix]
-    private static bool Prefix(int __0, ref bool __result)
-    {
-        try
-        {
-            if (!ArchipelagoPlugin.Instance.Service.ShouldSuppressUnknownRelic(__0))
-                return true;
-            __result = false;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            PatchSafety.Report("AddUnknownRelicCollected", exception);
-            return true;
-        }
-    }
-}
-
-[HarmonyPatch(typeof(GameCode.SavedPlayerSlot), nameof(GameCode.SavedPlayerSlot.AddUnknownRelic))]
-internal static class UnknownRelicSaveGuardPatch
-{
-    [HarmonyPrefix]
-    private static bool Prefix(int __0)
-    {
-        try
-        {
-            return !ArchipelagoPlugin.Instance.Service.ShouldSuppressUnknownRelic(__0);
-        }
-        catch (Exception exception)
-        {
-            PatchSafety.Report("AddUnknownRelic", exception);
             return true;
         }
     }
@@ -179,7 +141,8 @@ internal static class NewRelicMarkerGuardPatch
 internal static class EsperTurnInPatch
 {
     // The game unlocks every pending relic and clears the pending list inside this single call, so the number of
-    // pending orb relics has to be read before it runs. The checks are reported afterwards, only if it completed.
+    // pending orb relics has to be read before it runs. The checks were already sent when the orbs were picked up;
+    // this only decides what Esper's reveal shows, and only if the call completed.
     [HarmonyPrefix]
     private static void Prefix(GameCode.SavedPlayerSlot SaveSlot, ref int __state)
     {
@@ -187,7 +150,7 @@ internal static class EsperTurnInPatch
         try
         {
             var service = ArchipelagoPlugin.Instance.Service;
-            if (!service.IsActive || !service.RelicOrbChecksOnEsper || SaveSlot?.unknownRelics is not { } pending)
+            if (!service.IsActive || SaveSlot?.unknownRelics is not { } pending)
                 return;
             var defIds = new List<int>(pending.Count);
             for (var i = 0; i < pending.Count; i++)
@@ -208,8 +171,7 @@ internal static class EsperTurnInPatch
             if (__state <= 0)
                 return;
             var service = ArchipelagoPlugin.Instance.Service;
-            service.CollectRelicOrbsAtEsper(__state);
-            ReplaceRevealedRelics(service, RoomCMP, __state);
+            ShowRevealedItems(service, RoomCMP, __state);
         }
         catch (Exception exception)
         {
@@ -219,38 +181,71 @@ internal static class EsperTurnInPatch
 
     /// <summary>
     /// The reveal cutscene walks <c>RoomCMP.UnknownRelicsIdentified</c>. For every orb relic in it the game would
-    /// show its own relic; swap in the relics the multiworld has actually delivered instead.
+    /// show its own relic. Show what the multiworld really holds for that orb instead: when it is one of this
+    /// game's relics the cutscene shows that relic, and when it is anything else (another player's item, gold, a
+    /// trap) the cutscene keeps the game's relic and the overlay names the real item.
     /// </summary>
-    private static void ReplaceRevealedRelics(ConnectionService service, GameCode.XRoomCMP? roomCmp, int orbsHandedIn)
+    private static void ShowRevealedItems(ConnectionService service, GameCode.XRoomCMP? roomCmp, int orbsHandedIn)
     {
-        var identified = roomCmp?.UnknownRelicsIdentified;
-        var allRelics = GameCode.Defs?.relicFile?.RelicDefs;
-        if (identified is null || allRelics is null)
-        {
-            ArchipelagoPlugin.LogSource.LogWarning("Esper reveal: relic lists unavailable; the game's own relics will be shown.");
-            return;
-        }
-        if (service.TakeRelicsToReveal(orbsHandedIn) is not { } chosen)
+        if (service.TakeOrbReveals(orbsHandedIn) is not { } reveals)
             return;
 
+        var identified = roomCmp?.UnknownRelicsIdentified;
+        var allRelics = GameCode.Defs?.relicFile?.RelicDefs;
+        var canSwap = identified is not null && allRelics is not null;
+        if (!canSwap)
+            ArchipelagoPlugin.LogSource.LogWarning("Esper reveal: relic lists unavailable; the game's own relics will be shown.");
+
         var slot = 0;
-        for (var i = 0; i < identified.Count && slot < chosen.Length; i++)
+        var listIndex = 0;
+        while (slot < reveals.Length)
         {
-            var shown = identified[i];
-            if (shown is null || !GameCatalog.Data.IsOrbRelic(shown.id))
-                continue;
-            var replacementId = chosen[slot++];
-            if (replacementId is not { } wanted)
-                continue;
-            for (var r = 0; r < allRelics.Count; r++)
+            // Walk the cutscene list for the next orb relic; outside the list there is nothing to swap.
+            XRelicDef? shown = null;
+            if (canSwap)
             {
-                if (allRelics[r]?.id != wanted)
-                    continue;
-                identified[i] = allRelics[r];
-                ArchipelagoPlugin.LogSource.LogInfo($"Esper reveal: showing relic {wanted} instead of {shown.id}.");
-                break;
+                while (listIndex < identified!.Count)
+                {
+                    var candidate = identified[listIndex];
+                    if (candidate is not null && GameCatalog.Data.IsOrbRelic(candidate.id))
+                    {
+                        shown = candidate;
+                        break;
+                    }
+                    listIndex++;
+                }
             }
+
+            var reveal = reveals[slot++];
+            if (reveal.RelicDefId is { } wanted)
+            {
+                if (shown is not null && TrySwapRelic(identified!, allRelics!, listIndex, wanted))
+                    ArchipelagoPlugin.LogSource.LogInfo($"Esper reveal: showing relic {wanted} instead of {shown.id}.");
+            }
+            else if (reveal.Text is { } text)
+            {
+                service.ShowEsperMessage(text);
+            }
+
+            if (shown is not null)
+                listIndex++;
         }
+    }
+
+    private static bool TrySwapRelic(
+        Il2CppSystem.Collections.Generic.List<XRelicDef> identified,
+        Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<XRelicDef> allRelics,
+        int index,
+        int wantedDefId)
+    {
+        for (var r = 0; r < allRelics.Count; r++)
+        {
+            if (allRelics[r]?.id != wantedDefId)
+                continue;
+            identified[index] = allRelics[r];
+            return true;
+        }
+        return false;
     }
 }
 

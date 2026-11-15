@@ -13,6 +13,14 @@ class Skill:
 
 
 @dataclass(frozen=True)
+class StandardSkill:
+    """A skill every run starts with in the base game. It has no tablet; it is only an item here."""
+
+    name: str
+    ability_id: int
+
+
+@dataclass(frozen=True)
 class Weapon:
     name: str
     weapon_id: int
@@ -107,6 +115,7 @@ class Catalog:
             Skill(entry["name"], entry["abilityId"], entry["locationName"], entry["region"])
             for entry in raw["skills"]
         ]
+        self.standard_skills = [StandardSkill(entry["name"], entry["abilityId"]) for entry in raw["standardSkills"]]
         self.weapons = [Weapon(entry["name"], entry["weaponId"]) for entry in raw["weapons"]]
         self.weapons_by_id = {weapon.weapon_id: weapon for weapon in self.weapons}
         self.fillers = [Filler(**entry) for entry in raw["fillers"]]
@@ -147,6 +156,8 @@ class Catalog:
         for index, skill in enumerate(self.skills):
             self.item_name_to_id[skill.name] = self.skill_item_id(index)
             self.location_name_to_id[skill.location_name] = self.skill_location_id(index)
+        for index, standard in enumerate(self.standard_skills):
+            self.item_name_to_id[standard.name] = self.standard_skill_item_id(index)
         for index, weapon in enumerate(self.weapons):
             self.item_name_to_id[weapon.name] = self.weapon_item_id(index)
         for index, filler in enumerate(self.fillers):
@@ -171,6 +182,10 @@ class Catalog:
 
     def skill_location_id(self, index: int) -> int:
         return self.id_base + 1000 + index
+
+    def standard_skill_item_id(self, index: int) -> int:
+        # Offset 20 sits between the tablet skills (1..10) and the weapons (100..), so no existing ID moves.
+        return self.id_base + 20 + index
 
     def weapon_item_id(self, index: int) -> int:
         return self.id_base + 100 + index

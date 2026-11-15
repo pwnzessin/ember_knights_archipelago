@@ -62,6 +62,15 @@
       "region": "Architect's Realm"
     }
   ],
+  "standardSkills": [
+    { "name": "Inferno", "abilityId": 1 },
+    { "name": "Bomb", "abilityId": 2 },
+    { "name": "Missile", "abilityId": 3 },
+    { "name": "Chakram", "abilityId": 4 },
+    { "name": "Frost Wall", "abilityId": 6 },
+    { "name": "Furious Charge", "abilityId": 8 },
+    { "name": "Cloak and Dagger", "abilityId": 36 }
+  ],
   "fillers": [
     {
       "name": "1 Archipelago Coin",

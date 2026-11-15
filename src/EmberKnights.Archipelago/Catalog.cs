@@ -11,6 +11,13 @@ public sealed class SkillDefinition
     public string Region { get; set; } = "";
 }
 
+/// <summary>A skill every run has in the base game. It has no tablet and no location; it is only an item.</summary>
+public sealed class StandardSkillDefinition
+{
+    public string Name { get; set; } = "";
+    public int AbilityId { get; set; }
+}
+
 public sealed class WeaponDefinition
 {
     public string Name { get; set; } = "";
@@ -84,6 +91,7 @@ public sealed class CatalogData
 {
     public int IdBase { get; set; }
     public List<SkillDefinition> Skills { get; set; } = new();
+    public List<StandardSkillDefinition> StandardSkills { get; set; } = new();
     public List<WeaponDefinition> Weapons { get; set; } = new();
     public List<FillerDefinition> Fillers { get; set; } = new();
     public List<EncounterDefinition> Minibosses { get; set; } = new();
@@ -104,6 +112,7 @@ public sealed class CatalogData
 
     public long SkillItemId(int index) => IdBase + 1 + index;
     public long SkillLocationId(int index) => IdBase + 1000 + index;
+    public long StandardSkillItemId(int index) => IdBase + 20 + index;
     public long WeaponItemId(int index) => IdBase + 100 + index;
     public long FillerItemId(int index) => IdBase + 200 + index;
     public long MinibossLocationId(int index) => IdBase + 2000 + index;
@@ -122,6 +131,8 @@ public sealed class CatalogData
             itemNames[SkillItemId(i)] = Skills[i].Name;
             locationNames[SkillLocationId(i)] = Skills[i].LocationName;
         }
+        for (var i = 0; i < StandardSkills.Count; i++)
+            itemNames[StandardSkillItemId(i)] = StandardSkills[i].Name;
         for (var i = 0; i < Weapons.Count; i++)
             itemNames[WeaponItemId(i)] = Weapons[i].Name;
         for (var i = 0; i < Fillers.Count; i++)
@@ -189,6 +200,16 @@ public sealed class CatalogData
     public SkillDefinition? SkillForAbility(int abilityId) => Skills.FirstOrDefault(skill => skill.AbilityId == abilityId);
     public SkillDefinition? SkillForItem(long itemId) => SkillAtIndex(itemId, 1, Skills.Count);
     public SkillDefinition? SkillForLocation(long locationId) => SkillAtIndex(locationId, 1000, Skills.Count);
+
+    /// <summary>The standard skill this item grants, or null when the item is not one.</summary>
+    public StandardSkillDefinition? StandardSkillForItem(long itemId)
+    {
+        var index = itemId - IdBase - 20;
+        return index >= 0 && index < StandardSkills.Count ? StandardSkills[(int)index] : null;
+    }
+
+    public StandardSkillDefinition? StandardSkillForAbility(int abilityId) =>
+        StandardSkills.FirstOrDefault(skill => skill.AbilityId == abilityId);
     public WeaponDefinition? WeaponForItem(long itemId)
     {
         var index = itemId - IdBase - 100;
@@ -241,7 +262,7 @@ public static class GameCatalog
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidOperationException("Embedded Archipelago catalog is invalid.");
         catalog.Initialize();
-        if (catalog.Skills.Count != 10 || catalog.Weapons.Count != 6 ||
+        if (catalog.Skills.Count != 10 || catalog.StandardSkills.Count != 7 || catalog.Weapons.Count != 6 ||
             catalog.Minibosses.Count != 16 || catalog.Bosses.Count != 14 ||
             catalog.EmberTree.Count != 30 || catalog.WeaponMods.Count != 87 || catalog.RoomMilestones.Count != 18 ||
             catalog.RelicOrbs.Count != 53 || catalog.Heat.MaxHeat != 55 || catalog.Heat.Modifiers.Count != 17 ||

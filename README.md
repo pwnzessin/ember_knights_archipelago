@@ -5,7 +5,7 @@ An unofficial [Archipelago](https://archipelago.gg) multiworld integration for *
 - **`apworld/ember_knights`** — the Archipelago world (item/location definitions, logic, options). Packaged as `ember_knights.apworld`.
 - **`src/EmberKnights.Archipelago`** — a BepInEx 6 (IL2CPP) client plugin that connects the running game to an Archipelago server.
 
-> **Status: v0.1, experimental.** Single-player campaign only. Co-op, Boss Rush, Daily Dungeon and DLC encounters are outside the tested scope.
+> **Status: v1.1, experimental.** Single-player campaign only. Co-op, Boss Rush, Daily Dungeon and DLC encounters are outside the tested scope.
 
 ## Not affiliated
 
@@ -27,6 +27,9 @@ The plugin compiles against assemblies that BepInEx generates from **your own in
 - Ember Tree upgrades cost Archipelago Coins; normal run Ember no longer feeds the Ember Tree while connected.
 - Reverse Heat: difficulty modifiers start high and are reduced by Heat Reduction items (YAML options `start_heat`, `minimum_heat`, `heat_reduction_per_item`, `heat_mode`, `heat_reroll`).
 - Optional DeathLink, and trap items (enemy ambush, boss ambush, Praxis arena trap).
+- Relic Orb checks are sent the moment you pick the orb up. You still hand the orb to Esper, and her reveal shows the real item that orb's location holds (the relic itself when it is one of yours, otherwise a message naming the item and the player).
+- Ember Tree and Ash (weapon mod) upgrades show an `AP:` line in their description naming the item the check holds. On Ember Tree nodes it only appears while the node can be unlocked.
+- Optional `starting_standard_skills` (3-7, default 3): you start with that many random standard skills (Inferno, Bomb, Missile, Chakram, Frost Wall, Furious Charge, Cloak and Dagger). The rest become items in the multiworld next to the ten tablet skills. Seeds generated before this option keep all standard skills unlocked.
 - Compact status overlay. **F6** connects/reconnects, **F7** disconnects and restores vanilla behavior.
 
 ## Install (players)

@@ -16,9 +16,12 @@ public sealed class ConnectionService
     private readonly HashSet<long> pendingChecks = new();
     private readonly HashSet<int> ownedAbilities = new();
     private readonly HashSet<int> startingWeapons = new() { 1 };
+    /// <summary>Standard skills this seed starts with, or null when the seed does not gate standard skills.</summary>
+    private HashSet<int>? startingStandardSkills;
     private readonly HashSet<int> ownedWeapons = new() { 1 };
     private readonly HashSet<int> ownedRelics = new();
     private readonly List<int> receivedRelicOrder = new();
+    private readonly Dictionary<long, ScoutedEntry> scoutedItems = new();
     private readonly string connectionUuid = Guid.NewGuid().ToString();
 
     private ArchipelagoSession? session;
@@ -78,8 +81,6 @@ public sealed class ConnectionService
     public int HeatReductionsReceived { get; private set; }
     public bool RandomHeatAssortment { get; private set; } = true;
     public bool CuratedHeatDifficulty { get; private set; }
-    /// <summary>True when Relic Orb checks are sent as Esper identifies the orbs instead of at pickup.</summary>
-    public bool RelicOrbChecksOnEsper { get; private set; }
     /// <summary>Ash given by each Ash item; null means the seed predates the option and the catalog amount applies.</summary>
     public int? AshFillerAmount { get; private set; }
     public int ActiveHeat => HeatSolver.EffectiveHeat(StartHeat, MinimumHeat, HeatReductionPerItem, HeatReductionsReceived);
@@ -154,10 +155,12 @@ public sealed class ConnectionService
         ownedAbilities.Clear();
         startingWeapons.Clear();
         startingWeapons.Add(1);
+        startingStandardSkills = null;
         ownedWeapons.Clear();
         ownedWeapons.Add(1);
         ownedRelics.Clear();
         receivedRelicOrder.Clear();
+        scoutedItems.Clear();
         roomProgress.Reset();
         wasInRunWorld = false;
         StartHeat = 0;
@@ -215,13 +218,20 @@ public sealed class ConnectionService
 
     public bool ResolveAbilityUnlocked(int abilityId, bool vanillaResult)
     {
-        if (!IsActive || GameCatalog.Data.SkillForAbility(abilityId) is null)
+        if (!IsActive)
             return vanillaResult;
-        return OwnsAbility(abilityId);
+        if (GameCatalog.Data.SkillForAbility(abilityId) is not null)
+            return OwnsAbility(abilityId);
+        // A standard skill is free only when the seed does not gate them. Otherwise it has to be a starting skill
+        // or one the multiworld has delivered.
+        if (GameCatalog.Data.StandardSkillForAbility(abilityId) is not null)
+            return StandardSkillPolicy.IsUnlocked(abilityId, startingStandardSkills, ownedAbilities);
+        return vanillaResult;
     }
 
     public bool ShouldSuppressAbilityGrant(int abilityId) =>
-        IsActive && GameCatalog.Data.SkillForAbility(abilityId) is not null;
+        IsActive && (GameCatalog.Data.SkillForAbility(abilityId) is not null ||
+                     (startingStandardSkills is not null && GameCatalog.Data.StandardSkillForAbility(abilityId) is not null));
 
     public bool OwnsWeapon(int weaponId) => weaponId == 1 || ownedWeapons.Contains(weaponId);
 
@@ -257,52 +267,26 @@ public sealed class ConnectionService
         IsActive && GameCatalog.Data.IsOrbRelic(relicDefId);
 
     /// <summary>
-    /// Blocks the base game from remembering a picked-up orb relic as "waiting for Esper"
-    /// (<c>AddUnknownRelic</c>, <c>AddUnknownRelicCollected</c>). Only needed when the check is sent at pickup; when it is
-    /// sent at Esper's turn-in the orb must stay pending so she has something to identify.
+    /// Picks what Esper's reveal shows for the orbs being handed in (see <see cref="RelicOrbPolicy.ChooseReveals"/>)
+    /// and records them as shown. Returns one entry per orb, or <c>null</c> when the game should play its own reveal.
     /// </summary>
-    public bool ShouldSuppressUnknownRelic(int relicDefId) =>
-        IsActive && !RelicOrbChecksOnEsper && GameCatalog.Data.IsOrbRelic(relicDefId);
-
-    /// <summary>True when picking up an orb should report its check immediately.</summary>
-    public bool ShouldCheckRelicOrbOnPickup => IsActive && !RelicOrbChecksOnEsper;
-
-    /// <summary>
-    /// Picks the relics Esper's reveal should show for the orbs being handed in (see
-    /// <see cref="RelicOrbPolicy.ChooseRevealedRelics"/>) and records them as shown. Returns one entry per orb, or
-    /// <c>null</c> when this reveal should be left to the game.
-    /// </summary>
-    public int?[]? TakeRelicsToReveal(int orbsHandedIn)
+    internal OrbReveal[]? TakeOrbReveals(int orbsHandedIn)
     {
-        if (!IsActive || !RelicOrbChecksOnEsper || state is null || orbsHandedIn <= 0)
+        if (!IsActive || state is null || orbsHandedIn <= 0)
             return null;
-        var chosen = RelicOrbPolicy.ChooseRevealedRelics(receivedRelicOrder, state.RelicsRevealed, orbsHandedIn);
-        var used = chosen.Count(defId => defId.HasValue);
-        if (used > 0)
-        {
-            state.RelicsRevealed += used;
-            SaveState();
-        }
+        var chosen = RelicOrbPolicy.ChooseReveals(state.RelicsRevealed, orbsHandedIn, state.OrbsCollected, ScoutedOrbAt);
+        // Orbs are identified in the order they were picked up, so every handed-in orb advances the counter,
+        // including ones whose item could not be shown.
+        state.RelicsRevealed = Math.Min(state.OrbsCollected, state.RelicsRevealed + orbsHandedIn);
+        SaveState();
         return chosen;
     }
 
     /// <summary>
-    /// Called when Esper starts identifying the orbs the player carried back to the hub. Reports one
-    /// "Relic Orb N" check per pending orb relic.
-    /// </summary>
-    public void CollectRelicOrbsAtEsper(int pendingOrbRelics)
-    {
-        if (!IsActive || !RelicOrbChecksOnEsper || pendingOrbRelics <= 0)
-            return;
-        ArchipelagoPlugin.LogSource.LogInfo($"Esper is identifying {pendingOrbRelics} relic orb(s).");
-        for (var i = 0; i < pendingOrbRelics; i++)
-            CollectRelicOrb();
-    }
-
-    /// <summary>
-    /// Records that the player collected a relic orb and reports the matching "Relic Orb N" check.
-    /// Orbs are numbered by how many have been collected, not by the relic inside, because the
-    /// game's own choice of relic depends on unlock state that the multiworld now controls.
+    /// Records that the player picked up a relic orb and reports the matching "Relic Orb N" check straight away.
+    /// The orb stays pending in the save so Esper can still identify it later. Orbs are numbered by how many have
+    /// been collected, not by the relic inside, because the game's own choice of relic depends on unlock state
+    /// that the multiworld now controls.
     /// </summary>
     public void CollectRelicOrb()
     {
@@ -322,6 +306,110 @@ public sealed class ConnectionService
         CheckLocation(locationId);
     }
 
+    /// <summary>What the multiworld holds at "Relic Orb <paramref name="order"/>", or null if it was not scouted.</summary>
+    internal ScoutedOrb? ScoutedOrbAt(int order)
+    {
+        if (GameCatalog.Data.LocationForRelicOrb(order) is not { } locationId ||
+            !scoutedItems.TryGetValue(locationId, out var item))
+            return null;
+        var relicDefId = item.IsOwnPlayer && GameCatalog.Data.RelicForItem(item.ItemId) is { } relic ? relic.DefId : (int?)null;
+        return new ScoutedOrb
+        {
+            Order = order,
+            ItemName = item.ItemName,
+            PlayerName = item.PlayerName,
+            IsOwnPlayer = item.IsOwnPlayer,
+            RelicDefId = relicDefId,
+        };
+    }
+
+    /// <summary>What the multiworld holds at an Ember Tree node's check, or null if not scouted.</summary>
+    internal ScoutedItem? ScoutedItemForEmberTreeNode(int defId) =>
+        GameCatalog.Data.LocationForEmberTreeNode(defId) is { } id ? ScoutedItemAt(id) : null;
+
+    /// <summary>What the multiworld holds at a weapon mod's check, or null if not scouted.</summary>
+    internal ScoutedItem? ScoutedItemForWeaponMod(int defId) =>
+        GameCatalog.Data.LocationForWeaponMod(defId) is { } id ? ScoutedItemAt(id) : null;
+
+    private ScoutedItem? ScoutedItemAt(long locationId) =>
+        scoutedItems.TryGetValue(locationId, out var item)
+            ? new ScoutedItem { ItemName = item.ItemName, PlayerName = item.PlayerName, IsOwnPlayer = item.IsOwnPlayer }
+            : null;
+
+    /// <summary>True once the location has been reported to the server (or the server already had it).</summary>
+    public bool IsLocationSent(long locationId)
+    {
+        if (pendingChecks.Contains(locationId))
+            return false;
+        try
+        {
+            return IsConnected && session is not null && session.Locations.AllLocationsChecked.Contains(locationId);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Shows a line in the overlay and the log, used by Esper's reveal for items that are not relics.</summary>
+    public void ShowEsperMessage(string text)
+    {
+        LastMessage = text;
+        ArchipelagoPlugin.LogSource.LogInfo(text);
+    }
+
+    private sealed record ScoutedEntry(long ItemId, string ItemName, string PlayerName, bool IsOwnPlayer);
+
+    /// <summary>
+    /// Looks up the item behind every relic orb, Ember Tree and weapon mod location once per connection. This is a
+    /// silent scout: it never creates hints, so it does not reveal anything to the rest of the room.
+    /// </summary>
+    private void ScoutUpgradeLocations(ArchipelagoSession currentSession)
+    {
+        var catalog = GameCatalog.Data;
+        var locationIds = catalog.RelicOrbs.Select(orb => catalog.RelicOrbLocationId(orb.Order - 1))
+            .Concat(catalog.EmberTree.Select((_, index) => catalog.EmberTreeLocationId(index)))
+            .Concat(catalog.WeaponMods.Select((_, index) => catalog.WeaponModLocationId(index)))
+            .ToArray();
+        if (locationIds.Length == 0)
+            return;
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                var scouted = await currentSession.Locations.ScoutLocationsAsync(HintCreationPolicy.None, locationIds);
+                var found = new Dictionary<long, ScoutedEntry>();
+                foreach (var locationId in locationIds)
+                {
+                    if (!scouted.TryGetValue(locationId, out var info))
+                        continue;
+                    var playerName = string.IsNullOrEmpty(info.Player.Alias)
+                        ? (info.Player.Name ?? $"player {info.Player.Slot}")
+                        : info.Player.Alias;
+                    found[locationId] = new ScoutedEntry(
+                        info.ItemId,
+                        info.ItemName ?? $"item {info.ItemId}",
+                        playerName,
+                        info.Player.Slot == currentSession.ConnectionInfo.Slot);
+                }
+                mainThreadActions.Enqueue(() =>
+                {
+                    if (!ReferenceEquals(session, currentSession))
+                        return;
+                    scoutedItems.Clear();
+                    foreach (var pair in found)
+                        scoutedItems[pair.Key] = pair.Value;
+                    ArchipelagoPlugin.LogSource.LogInfo(
+                        $"Scouted {found.Count} of {locationIds.Length} upgrade/orb locations for tooltips and Esper's reveal.");
+                });
+            }
+            catch (Exception exception)
+            {
+                ArchipelagoPlugin.LogSource.LogWarning($"Could not scout upgrade locations: {exception.Message}");
+            }
+        });
+    }
     public void CheckSkillTablet(int abilityId)
     {
         var skill = GameCatalog.Data.SkillForAbility(abilityId);
@@ -574,7 +662,6 @@ public sealed class ConnectionService
             pendingChecks.Clear();
             pendingChecks.UnionWith(state.PendingChecks);
             Goal = ReadSlotString(success.SlotData, "goal", "praxis");
-            RelicOrbChecksOnEsper = RelicOrbPolicy.ChecksOnEsperTurnIn(ReadSlotString(success.SlotData, "relic_orb_checks", ""));
             AshFillerAmount = success.SlotData.ContainsKey("ash_filler_amount")
                 ? Math.Clamp(ReadSlotInt(success.SlotData, "ash_filler_amount", 0), 0, 50)
                 : null;
@@ -613,6 +700,9 @@ public sealed class ConnectionService
                 startingWeapons.Add(weaponId);
             ownedWeapons.Clear();
             ownedWeapons.UnionWith(startingWeapons);
+            success.SlotData.TryGetValue("starting_standard_skill_ids", out var startingSkillsRaw);
+            startingStandardSkills = StandardSkillPolicy.ReadStartingSkills(
+                startingSkillsRaw, id => GameCatalog.Data.StandardSkillForAbility(id) is not null);
             loggedIn = true;
             IsActive = true;
             StatusText = $"Connected - {slotName} @ {currentSession.RoomState.Seed}";
@@ -629,6 +719,7 @@ public sealed class ConnectionService
                 deathLinkService?.EnableDeathLink();
             FlushPendingChecks();
             TrySendGoal();
+            ScoutUpgradeLocations(currentSession);
         }
         catch (Exception exception)
         {
@@ -691,6 +782,8 @@ public sealed class ConnectionService
             {
                 if (GameCatalog.Data.SkillForItem(item.ItemId) is { } skill)
                     ownedAbilities.Add(skill.AbilityId);
+                if (GameCatalog.Data.StandardSkillForItem(item.ItemId) is { } standardSkill)
+                    ownedAbilities.Add(standardSkill.AbilityId);
                 if (GameCatalog.Data.WeaponForItem(item.ItemId) is { } weapon)
                     ownedWeapons.Add(weapon.WeaponId);
                 if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic && ownedRelics.Add(relic.DefId))
@@ -729,6 +822,12 @@ public sealed class ConnectionService
 
     private bool ApplyItem(ItemInfo item)
     {
+        if (GameCatalog.Data.StandardSkillForItem(item.ItemId) is { } standard)
+        {
+            LastMessage = $"Received skill: {standard.Name}";
+            ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
+            return true;
+        }
         if (GameCatalog.Data.SkillForItem(item.ItemId) is { } skill)
         {
             LastMessage = $"Received skill: {skill.Name}";

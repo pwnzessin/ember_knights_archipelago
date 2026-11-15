@@ -657,19 +657,7 @@ public class HeatSolverTests
 
 public class RelicOrbPolicyTests
 {
-    [Theory]
-    [InlineData("on_esper_turn_in", true)]
-    [InlineData("ON_ESPER_TURN_IN", true)]
-    [InlineData("0", true)]
-    [InlineData("on_pickup", false)]
-    [InlineData("1", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    [InlineData("something_else", false)]
-    public void SlotValueSelectsWhenTheCheckIsSent(string? slotValue, bool expectedOnEsper)
-    {
-        Assert.Equal(expectedOnEsper, RelicOrbPolicy.ChecksOnEsperTurnIn(slotValue));
-    }
+
 
     [Fact]
     public void OnlyOrbRelicsInThePendingListAreCounted()
@@ -695,34 +683,75 @@ public class RelicRevealTests
 {
     private static readonly CatalogData Catalog = GameCatalog.Data;
 
-    [Fact]
-    public void RevealShowsReceivedRelicsOldestFirst()
+    private static ScoutedOrb Own(int order, int relicDefId) => new()
     {
-        var received = new[] { 183, 48, 100 };
-        Assert.Equal(new int?[] { 183, 48 }, RelicOrbPolicy.ChooseRevealedRelics(received, alreadyRevealed: 0, orbsHandedIn: 2));
+        Order = order, ItemName = "Some Relic", PlayerName = "Me", IsOwnPlayer = true, RelicDefId = relicDefId,
+    };
+
+    private static ScoutedOrb Foreign(int order, string item, string player) => new()
+    {
+        Order = order, ItemName = item, PlayerName = player, IsOwnPlayer = false,
+    };
+
+    [Fact]
+    public void AnOrbHoldingMyRelicRevealsThatRelic()
+    {
+        var scouted = new Dictionary<int, ScoutedOrb> { [1] = Own(1, 183), [2] = Own(2, 48) };
+        var shown = RelicOrbPolicy.ChooseReveals(0, 2, 2, order => scouted.GetValueOrDefault(order));
+        Assert.Equal(new int?[] { 183, 48 }, shown.Select(reveal => reveal.RelicDefId).ToArray());
+        Assert.All(shown, reveal => Assert.Null(reveal.Text));
     }
 
     [Fact]
-    public void RevealContinuesAfterRelicsAlreadyShown()
+    public void AnOrbHoldingAnotherPlayersItemRevealsTextNotARelic()
     {
-        var received = new[] { 183, 48, 100 };
-        Assert.Equal(new int?[] { 100 }, RelicOrbPolicy.ChooseRevealedRelics(received, alreadyRevealed: 2, orbsHandedIn: 1));
+        var scouted = new Dictionary<int, ScoutedOrb> { [1] = Foreign(1, "Hookshot", "Link") };
+        var shown = RelicOrbPolicy.ChooseReveals(0, 1, 1, order => scouted.GetValueOrDefault(order));
+        Assert.Null(shown[0].RelicDefId);
+        Assert.Equal("Esper senses: Hookshot for Link", shown[0].Text);
     }
 
     [Fact]
-    public void SlotsWithNothingReceivedKeepTheGamesOwnRelic()
+    public void AnOrbHoldingNonRelicItemOfMyOwnNamesTheItemWithoutAPlayer()
     {
-        var received = new[] { 183 };
-        Assert.Equal(new int?[] { 183, null, null }, RelicOrbPolicy.ChooseRevealedRelics(received, 0, 3));
-        Assert.Equal(new int?[] { null, null }, RelicOrbPolicy.ChooseRevealedRelics(received, 1, 2));
+        var gold = new ScoutedOrb { Order = 1, ItemName = "50 Gold", PlayerName = "Me", IsOwnPlayer = true, RelicDefId = null };
+        var shown = RelicOrbPolicy.ChooseReveals(0, 1, 1, _ => gold);
+        Assert.Null(shown[0].RelicDefId);
+        Assert.Equal("Esper senses: 50 Gold", shown[0].Text);
+    }
+
+    [Fact]
+    public void RevealContinuesWithTheOrbsAfterTheOnesAlreadyShown()
+    {
+        var scouted = new Dictionary<int, ScoutedOrb> { [1] = Own(1, 183), [2] = Own(2, 48), [3] = Own(3, 100) };
+        var shown = RelicOrbPolicy.ChooseReveals(alreadyRevealed: 2, orbsHandedIn: 1, orbsCollected: 3,
+            order => scouted.GetValueOrDefault(order));
+        Assert.Equal(100, shown[0].RelicDefId);
+    }
+
+    [Fact]
+    public void OrbsThatWereNeverScoutedKeepTheGamesOwnRelic()
+    {
+        var shown = RelicOrbPolicy.ChooseReveals(0, 2, 2, _ => null);
+        Assert.All(shown, reveal => Assert.Equal(default, reveal));
+    }
+
+    [Fact]
+    public void AnOrbNumberBeyondWhatWasCollectedIsNeverRevealed()
+    {
+        // Two orbs handed in but only one was ever counted as collected: the second has no location to describe.
+        var scouted = new Dictionary<int, ScoutedOrb> { [1] = Own(1, 183), [2] = Own(2, 48) };
+        var shown = RelicOrbPolicy.ChooseReveals(0, 2, orbsCollected: 1, order => scouted.GetValueOrDefault(order));
+        Assert.Equal(183, shown[0].RelicDefId);
+        Assert.Equal(default, shown[1]);
     }
 
     [Fact]
     public void NoOrbsOrNegativeCountsShowNothing()
     {
-        Assert.Empty(RelicOrbPolicy.ChooseRevealedRelics(new[] { 183 }, 0, 0));
-        Assert.Empty(RelicOrbPolicy.ChooseRevealedRelics(new[] { 183 }, 0, -3));
-        Assert.Equal(new int?[] { 183 }, RelicOrbPolicy.ChooseRevealedRelics(new[] { 183 }, -5, 1));
+        Assert.Empty(RelicOrbPolicy.ChooseReveals(0, 0, 5, _ => Own(1, 183)));
+        Assert.Empty(RelicOrbPolicy.ChooseReveals(0, -3, 5, _ => Own(1, 183)));
+        Assert.Equal(183, RelicOrbPolicy.ChooseReveals(-5, 1, 5, _ => Own(1, 183))[0].RelicDefId);
     }
 
     [Fact]
@@ -734,6 +763,14 @@ public class RelicRevealTests
             Assert.NotNull(relic);
             Assert.True(Catalog.IsOrbRelic(relic!.DefId));
         }
+    }
+
+    [Fact]
+    public void EveryOrbLocationIdIsDistinctSoTheScoutMapIsUnambiguous()
+    {
+        var ids = Catalog.RelicOrbs.Select(orb => Catalog.RelicOrbLocationId(orb.Order - 1)).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.Equal(53, ids.Count);
     }
 }
 public class AshFillerTests
@@ -796,5 +833,234 @@ public class RetiredCoinBundleTests
         var filler = Catalog.FillerForItem(Catalog.IdBase + 202);
         Assert.NotNull(filler);
         Assert.Equal(("coin", 3), (filler!.Kind, filler.Amount));
+    }
+}
+public class UpgradeTooltipTests
+{
+    private static readonly CatalogData Catalog = GameCatalog.Data;
+
+    private static ScoutedItem Mine(string item) => new() { ItemName = item, PlayerName = "Me", IsOwnPlayer = true };
+    private static ScoutedItem Theirs(string item, string player) => new() { ItemName = item, PlayerName = player, IsOwnPlayer = false };
+
+    [Fact]
+    public void ShowsOnlyTheItemNotTheCheckName()
+    {
+        var line = UpgradeTooltip.Format("Ember Tree: Regeneration", Mine("5 Archipelago Coins"), alreadyChecked: false);
+        Assert.Equal($"{UpgradeTooltip.Marker} 5 Archipelago Coins", line);
+        Assert.DoesNotContain("Ember Tree", line);
+        Assert.DoesNotContain(">", line.Replace("<color=#8fd3ff>", "").Replace("</color>", ""));
+    }
+
+    [Fact]
+    public void NamesTheOtherPlayerForTheirItem()
+    {
+        var line = UpgradeTooltip.Format("Sword Mod: Spark", Theirs("Hookshot", "Link"), false);
+        Assert.Equal($"{UpgradeTooltip.Marker} Hookshot for Link", line);
+        Assert.DoesNotContain("Sword Mod", line);
+    }
+
+    [Fact]
+    public void FallsBackToTheCheckNameOnlyWhenTheItemWasNotScouted()
+    {
+        var line = UpgradeTooltip.Format("Ember Tree: Thick Skin", null, false);
+        Assert.Equal($"{UpgradeTooltip.Marker} Ember Tree: Thick Skin", line);
+    }
+
+    [Fact]
+    public void MarksChecksThatWereAlreadySent()
+    {
+        var sent = UpgradeTooltip.Format("Ember Tree: Thick Skin", Mine("Cyclone"), alreadyChecked: true);
+        Assert.Contains("(sent)", sent);
+        Assert.StartsWith($"{UpgradeTooltip.Marker} Cyclone", sent);
+        Assert.DoesNotContain("(sent)", UpgradeTooltip.Format("Ember Tree: Thick Skin", Mine("Cyclone"), false));
+    }
+
+    [Fact]
+    public void AppendKeepsTheGamesDescriptionAndAddsTheLineOnce()
+    {
+        var line = UpgradeTooltip.Format("Ember Tree: Regeneration", null, false);
+        var once = UpgradeTooltip.Append("Heal over time.", line);
+        Assert.StartsWith("Heal over time.\n", once);
+        Assert.EndsWith(line, once);
+        Assert.Equal(once, UpgradeTooltip.Append(once, line));
+    }
+
+    [Fact]
+    public void AppendHandlesAnEmptyOrMissingDescription()
+    {
+        var line = UpgradeTooltip.Format("Ember Tree: Regeneration", null, false);
+        Assert.Equal(line, UpgradeTooltip.Append(null, line));
+        Assert.Equal(line, UpgradeTooltip.Append("", line));
+    }
+
+    [Fact]
+    public void EveryEmberTreeNodeAndWeaponModHasALocationTheTooltipCanName()
+    {
+        foreach (var node in Catalog.EmberTree)
+        {
+            var id = Catalog.LocationForEmberTreeNode(node.DefId);
+            Assert.NotNull(id);
+            Assert.StartsWith("Ember Tree: ", Catalog.GetLocationName(id!.Value));
+        }
+        foreach (var mod in Catalog.WeaponMods)
+        {
+            var id = Catalog.LocationForWeaponMod(mod.DefId);
+            Assert.NotNull(id);
+            Assert.Equal(mod.Name, Catalog.GetLocationName(id!.Value));
+        }
+    }
+
+    // The game's own EmberTreeLevels table: upgrades required to open each stage, stage 1 first.
+    private static readonly int[] Thresholds = { 0, 1, 4, 7, 10, 13, 16, 19, 30, 35, 104 };
+
+    [Fact]
+    public void AFreshTreeOnlyOpensStageOne()
+    {
+        Assert.True(UpgradeTooltip.CanUnlockEmberTreeNode(false, 1, 0, Thresholds));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 2, 0, Thresholds));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 10, 0, Thresholds));
+    }
+
+    [Theory]
+    [InlineData(2, 0, false)]
+    [InlineData(2, 1, true)]
+    [InlineData(3, 3, false)]
+    [InlineData(3, 4, true)]
+    [InlineData(8, 18, false)]
+    [InlineData(8, 19, true)]
+    [InlineData(9, 29, false)]
+    [InlineData(9, 30, true)]
+    [InlineData(10, 34, false)]
+    [InlineData(10, 35, true)]
+    [InlineData(10, 200, true)]
+    public void AStageOpensExactlyAtItsUpgradeThreshold(int stage, int invested, bool expected)
+    {
+        Assert.Equal(expected, UpgradeTooltip.CanUnlockEmberTreeNode(false, stage, invested, Thresholds));
+    }
+
+    [Fact]
+    public void AnAlreadyUnlockedNodeIsNeverShownEvenInAnOpenStage()
+    {
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(true, 1, 50, Thresholds));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(true, 10, 200, Thresholds));
+    }
+
+    [Fact]
+    public void BadInputHidesTheLineInsteadOfGuessing()
+    {
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 0, 10, Thresholds));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, -1, 10, Thresholds));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 1, 10, null));
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 1, 10, Array.Empty<int>()));
+        // A stage past the end of the table is treated as closed.
+        Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(false, 12, 1000, Thresholds));
+    }
+
+    [Fact]
+    public void EveryCatalogNodeStageHasAThresholdInTheGamesTable()
+    {
+        foreach (var node in Catalog.EmberTree)
+        {
+            Assert.InRange(node.Stage, 1, Thresholds.Length);
+            Assert.True(UpgradeTooltip.CanUnlockEmberTreeNode(false, node.Stage, 1000, Thresholds), node.Name);
+        }
+    }
+
+    [Fact]
+    public void UnknownUpgradesGetNoLocationSoNoTooltipIsAdded()
+    {
+        Assert.Null(Catalog.LocationForEmberTreeNode(-1));
+        Assert.Null(Catalog.LocationForWeaponMod(-1));
+    }
+}
+
+public class StandardSkillTests
+{
+    private static readonly CatalogData Catalog = GameCatalog.Data;
+    private static bool IsStandard(int id) => Catalog.StandardSkillForAbility(id) is not null;
+
+    [Fact]
+    public void TheSevenBaseGameDefaultSkillsAreTheStandardSkills()
+    {
+        Assert.Equal(7, Catalog.StandardSkills.Count);
+        Assert.Equal(new[] { 1, 2, 3, 4, 6, 8, 36 }, Catalog.StandardSkills.Select(skill => skill.AbilityId).ToArray());
+    }
+
+    [Fact]
+    public void StandardSkillItemIdsAreClearOfTabletSkillsAndWeaponsAndMatchTheApworld()
+    {
+        var ids = Catalog.StandardSkills.Select((_, index) => Catalog.StandardSkillItemId(index)).ToList();
+        Assert.Equal(Enumerable.Range(0, 7).Select(i => (long)Catalog.IdBase + 20 + i).ToList(), ids);
+        Assert.DoesNotContain(ids, id => Enumerable.Range(0, Catalog.Skills.Count).Select(Catalog.SkillItemId).Contains(id));
+        Assert.True(ids.Max() < Catalog.WeaponItemId(0));
+    }
+
+    [Fact]
+    public void EveryStandardSkillItemResolvesBackToItsSkillAndNameAndNothingElseDoes()
+    {
+        for (var i = 0; i < Catalog.StandardSkills.Count; i++)
+        {
+            var id = Catalog.StandardSkillItemId(i);
+            Assert.Same(Catalog.StandardSkills[i], Catalog.StandardSkillForItem(id));
+            Assert.Equal(Catalog.StandardSkills[i].Name, Catalog.GetItemName(id));
+            Assert.Null(Catalog.SkillForItem(id));
+        }
+        Assert.Null(Catalog.StandardSkillForItem(Catalog.SkillItemId(0)));
+        Assert.Null(Catalog.StandardSkillForItem(Catalog.WeaponItemId(0)));
+        Assert.Null(Catalog.StandardSkillForItem(Catalog.IdBase + 19));
+        Assert.Null(Catalog.StandardSkillForItem(Catalog.IdBase + 27));
+    }
+
+    [Fact]
+    public void ATabletSkillIsNeverAlsoAStandardSkill()
+    {
+        foreach (var tablet in Catalog.Skills)
+            Assert.Null(Catalog.StandardSkillForAbility(tablet.AbilityId));
+    }
+
+    [Fact]
+    public void ASeedWithoutTheKeyDoesNotGateStandardSkills()
+    {
+        // Seeds generated before the option existed: every standard skill stays unlocked so old saves lose nothing.
+        Assert.Null(StandardSkillPolicy.ReadStartingSkills(null, IsStandard));
+        Assert.True(StandardSkillPolicy.IsUnlocked(1, null, new HashSet<int>()));
+        Assert.True(StandardSkillPolicy.IsUnlocked(36, null, new HashSet<int>()));
+    }
+
+    [Fact]
+    public void ASeedWithTheKeyGatesStandardSkillsEvenWhenTheListIsEmpty()
+    {
+        var starting = StandardSkillPolicy.ReadStartingSkills(new List<object> { 1L, 3L, 8L }, IsStandard);
+        Assert.NotNull(starting);
+        Assert.Equal(new[] { 1, 3, 8 }, starting!.OrderBy(id => id).ToArray());
+        Assert.NotNull(StandardSkillPolicy.ReadStartingSkills(new List<object>(), IsStandard));
+    }
+
+    [Fact]
+    public void StartingSkillsAreUnlockedAndTheRestOnlyOnceReceived()
+    {
+        var starting = new HashSet<int> { 1, 3, 8 };
+        var received = new HashSet<int>();
+        Assert.True(StandardSkillPolicy.IsUnlocked(1, starting, received));
+        Assert.False(StandardSkillPolicy.IsUnlocked(2, starting, received));
+        Assert.False(StandardSkillPolicy.IsUnlocked(36, starting, received));
+        received.Add(2);
+        Assert.True(StandardSkillPolicy.IsUnlocked(2, starting, received));
+        Assert.False(StandardSkillPolicy.IsUnlocked(36, starting, received));
+    }
+
+    [Fact]
+    public void SlotDataIdsThatAreNotStandardSkillsOrNotNumbersAreIgnored()
+    {
+        // 30 is Cyclone (a tablet skill), 999 does not exist, "x" and null are junk.
+        var starting = StandardSkillPolicy.ReadStartingSkills(new List<object?> { 2L, 30L, 999L, "x", null, 4 }, IsStandard);
+        Assert.Equal(new[] { 2, 4 }, starting!.OrderBy(id => id).ToArray());
+    }
+
+    [Fact]
+    public void AStringOrNonListValueIsTreatedAsMissing()
+    {
+        Assert.Null(StandardSkillPolicy.ReadStartingSkills("1,2,3", IsStandard));
+        Assert.Null(StandardSkillPolicy.ReadStartingSkills(5L, IsStandard));
     }
 }
