@@ -33,8 +33,9 @@ class TestDefaultWorld(EmberKnightsTestBase):
         self.assertEqual(228, len(locations))
         self.assertEqual(len(locations), len(self.multiworld.itempool))
         self.assertEqual("praxis", self.world.fill_slot_data()["goal"])
-        # Orb checks are always sent at pickup now; the retired option no longer changes the slot data.
-        self.assertEqual("on_pickup", self.world.fill_slot_data()["relic_orb_checks"])
+        # Orb checks are always sent at pickup; the old timing option is gone from the slot data and the options.
+        self.assertNotIn("relic_orb_checks", self.world.fill_slot_data())
+        self.assertFalse(hasattr(self.world.options, "relic_orb_checks"))
 
     def test_skills_relics_weapons_and_heat_reductions_match_options(self) -> None:
         item_names = [item.name for item in self.multiworld.itempool]
@@ -91,9 +92,6 @@ class TestDefaultWorld(EmberKnightsTestBase):
         self.assertTrue({milestone.location_name for milestone in CATALOG.room_milestones}.issubset(names))
         self.assertTrue({orb.location_name for orb in CATALOG.relic_orbs}.issubset(names))
 
-    def test_retired_relic_orb_option_never_changes_the_slot_data(self) -> None:
-        # Old YAML files may still carry either value; both must keep working and both mean "at pickup".
-        self.assertEqual("on_pickup", self.world.fill_slot_data()["relic_orb_checks"])
 
     def test_relic_orbs_are_reachable_from_the_start(self) -> None:
         for orb in CATALOG.relic_orbs:
@@ -153,7 +151,6 @@ class TestReducedWorld(EmberKnightsTestBase):
         "heat_reduction_per_item": 4,
         "traps": True,
         "death_link": True,
-        "relic_orb_checks": "on_pickup",
     }
 
     def test_reduced_counts_and_slot_data(self) -> None:
@@ -182,7 +179,7 @@ class TestReducedWorld(EmberKnightsTestBase):
         self.assertEqual(4, slot_data["heat_reduction_per_item"])
         self.assertTrue(slot_data["traps"])
         self.assertTrue(slot_data["death_link"])
-        self.assertEqual("on_pickup", slot_data["relic_orb_checks"])
+        self.assertNotIn("relic_orb_checks", slot_data)
 
 
 class TestZeroHeatSpanWorld(EmberKnightsTestBase):
@@ -431,18 +428,12 @@ class TestCuratedHeatDifficulty(EmberKnightsTestBase):
     def test_slot_data_names_the_new_mode(self) -> None:
         self.assertEqual("curated_heat_difficulty", self.world.fill_slot_data()["heat_mode"])
 
-    def test_no_slot_data_still_mentions_blitz_or_the_old_mode_name(self) -> None:
-        values = [str(value) for value in self.world.fill_slot_data().values()]
-        self.assertFalse(any("late_blitz" in value for value in values), values)
+    def test_the_old_mode_name_is_no_longer_accepted(self) -> None:
+        from ..options import HeatMode
 
+        self.assertFalse(hasattr(HeatMode, "alias_random_assortment_late_blitz"))
+        self.assertNotIn("late_blitz", HeatMode.name_lookup.values())
 
-class TestOldHeatModeNameStillWorks(EmberKnightsTestBase):
-    """YAML files written before the rename use random_assortment_late_blitz; it must resolve to the curated mode."""
-
-    options = {"heat_mode": "random_assortment_late_blitz"}
-
-    def test_old_name_resolves_to_the_curated_mode(self) -> None:
-        self.assertEqual("curated_heat_difficulty", self.world.fill_slot_data()["heat_mode"])
 
 
 class TestOtherHeatModesAreUnchanged(unittest.TestCase):

@@ -257,8 +257,7 @@ class EmberKnightsWorld(World):
         # the option existed lack it, and the client then keeps every standard skill unlocked as in the base game.
         slot_data["starting_standard_skill_ids"] = list(self.starting_standard_skill_ids)
         slot_data["heat_reroll"] = "once" if self.options.heat_reroll == HeatReroll.option_once else "every_run"
-        # Retired: orb checks are always sent at pickup now. The key is still written so older clients read a value.
-        slot_data["relic_orb_checks"] = "on_pickup"
+
         # heat_mode is the single source of truth for how heat is chosen, including whether the curated tiers apply.
         if self.options.heat_mode == HeatMode.option_sequential:
             slot_data["heat_mode"] = "sequential"
@@ -267,5 +266,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.1.0"
+        slot_data["mod_version"] = "1.2.0"
         return slot_data

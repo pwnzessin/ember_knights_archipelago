@@ -676,17 +676,10 @@ public sealed class ConnectionService
             var heatModeText = ReadSlotString(success.SlotData, "heat_mode", plugin.HeatMode.Value);
             RandomHeatAssortment = !string.Equals(heatModeText, "sequential", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(heatModeText, "1", StringComparison.Ordinal);
-            // heat_mode alone decides this. "random_assortment_late_blitz" was this mode's earlier name and only held
-            // Blitz back; a seed that still carries it, or the old standalone "blitz_only_at_high_heat" flag, now gets the
-            // curated tiers, which also keep Blitz for the end.
-            var legacyBlitzFlag = success.SlotData.ContainsKey("blitz_only_at_high_heat") &&
-                !success.SlotData.ContainsKey("heat_reroll") &&
-                ReadSlotBool(success.SlotData, "blitz_only_at_high_heat", false);
+            // heat_mode alone decides whether the curated tiers apply.
             CuratedHeatDifficulty =
                 string.Equals(heatModeText, "curated_heat_difficulty", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(heatModeText, "random_assortment_late_blitz", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(heatModeText, "2", StringComparison.Ordinal) ||
-                (RandomHeatAssortment && legacyBlitzFlag);
+                string.Equals(heatModeText, "2", StringComparison.Ordinal);
             var rerollText = ReadSlotString(success.SlotData, "heat_reroll", plugin.HeatReroll.Value);
             rerollHeatEachRun = !string.Equals(rerollText, "once", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(rerollText, "1", StringComparison.Ordinal);

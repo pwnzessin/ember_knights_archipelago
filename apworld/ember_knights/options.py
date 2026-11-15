@@ -72,8 +72,7 @@ class HeatMode(Choice):
     option_random_assortment = 0
     option_sequential = 1
     option_curated_heat_difficulty = 2
-    # The mode used to be called random_assortment_late_blitz. YAML files that still use the old name keep working.
-    alias_random_assortment_late_blitz = 2
+
     default = 0
 
 
@@ -91,23 +90,6 @@ class HeatReroll(Choice):
     option_once = 1
     default = 0
 
-
-class RelicOrbChecks(Choice):
-    """Retired option, kept only so existing YAML files still work. It no longer changes anything.
-
-    A Relic Orb check is always sent the moment you pick the orb up. You still carry the orb back and hand it to
-    Esper as usual, and her reveal shows the real item that orb's location holds (the relic itself when it is one
-    of yours, otherwise a message naming the item and the player it is for).
-
-    Both values behave the same. This option may be removed in a future version.
-    """
-
-    display_name = "Relic Orb Checks (retired)"
-    option_on_pickup = 0
-    option_on_esper_turn_in = 1
-    alias_pickup = 0
-    alias_esper = 1
-    default = 0
 
 
 class StartingArchipelagoCoins(Range):
@@ -190,7 +172,6 @@ class EmberKnightsOptions(PerGameCommonOptions):
     heat_reduction_per_item: HeatReductionPerItem
     heat_mode: HeatMode
     heat_reroll: HeatReroll
-    relic_orb_checks: RelicOrbChecks
     starting_archipelago_coins: StartingArchipelagoCoins
     extra_starting_weapons: ExtraStartingWeapons
     starting_standard_skills: StartingStandardSkills
