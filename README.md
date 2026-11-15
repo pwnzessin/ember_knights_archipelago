@@ -48,7 +48,7 @@ To update later, close the game and extract the newer zip over the old files. Yo
 
 Set `auto_connect = true` in the config if you want it to connect by itself a few seconds after the game starts.
 
-Use a fresh save for a new seed. Unlocks already in a save, such as Ember Tree upgrades, are reported as checks when you first connect.
+Use a fresh save for a new seed. On the first connect of a new seed, anything already unlocked in the save (such as the Ember Tree nodes a fresh save starts with) is recorded and is not sent as a check.
 
 ## What the mod does
 
@@ -126,7 +126,7 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 ## Known issues
 
 - **Ash from an item:** your Ash total updates (you can see it when buying), but the Ash number in the top-left HUD does not until the game refreshes it.
-- **Reused saves:** Ember Tree nodes the save already has unlocked are reported as checks when you first connect, so a reused save can send some checks immediately.
+- **Seeds that ran before this change:** a seed that had already received items before the unlock baseline existed keeps reporting every unlocked Ember Tree node and weapon mod. A new seed records what is already unlocked on its first connect (for example the five Ember Tree nodes a fresh save starts with) and never reports those as checks.
 - **Starting skills:** gated standard skills in the Nexus shop and the in-run skill selector are untested.
 - **Boss Ambush Trap:** the miniboss it spawns can stay on screen after you kill it. Leaving the room should clear it.
 - Co-op and online multiplayer are not tested.

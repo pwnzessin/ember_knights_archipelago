@@ -17,6 +17,23 @@ public sealed class SessionState
     /// <summary>How many received relics Esper's reveal has already shown, oldest first.</summary>
     public int RelicsRevealed { get; set; }
 
+    /// <summary>
+    /// True once the Ember Tree nodes and weapon mods that were already unlocked when this seed first connected have
+    /// been written to <see cref="BaselineEmberTree"/> and <see cref="BaselineWeaponMods"/>. They are never reported as
+    /// checks. A seed that ran before this existed leaves it false and is marked as having no baseline (see
+    /// <see cref="BaselineSkipped"/>), so it keeps reporting every unlocked node as it always did.
+    /// </summary>
+    public bool BaselineTaken { get; set; }
+
+    /// <summary>True for a seed that had already run when the baseline was introduced; it is never given one.</summary>
+    public bool BaselineSkipped { get; set; }
+
+    /// <summary>Ember Tree node ids that were already unlocked at first connect and are not checks.</summary>
+    public List<int> BaselineEmberTree { get; set; } = new();
+
+    /// <summary>Weapon mod ids that were already unlocked at first connect and are not checks.</summary>
+    public List<int> BaselineWeaponMods { get; set; } = new();
+
     public List<long> PendingChecks { get; set; } = new();
     public List<long> PendingFillers { get; set; } = new();
     public bool GoalPending { get; set; }

@@ -561,17 +561,45 @@ public sealed class ConnectionService
             if (ArchipelagoPlugin.Instance.CoinIconEnabled.Value)
                 CoinIconPatcher.TryApply();
 
+            var unlockedNodes = new List<int>();
             foreach (var node in GameCatalog.Data.EmberTree)
             {
                 var data = saveSlot.GetEmberTreeUpgradeData(node.DefId);
                 if (data is not null && data.Unlocked)
-                    CheckEmberTreeNode(node.DefId);
+                    unlockedNodes.Add(node.DefId);
             }
+            var unlockedMods = new List<int>();
             foreach (var mod in GameCatalog.Data.WeaponMods)
             {
                 var data = saveSlot.GetWeaponMod(mod.DefId, 0);
                 if (data is not null && data.Unlocked)
-                    CheckWeaponMod(mod.DefId);
+                    unlockedMods.Add(mod.DefId);
+            }
+
+            // The first scan of a brand-new seed records what is already unlocked, such as the five Ember Tree nodes
+            // the game gives a fresh save, so those never become checks. It runs once per seed.
+            if (state is not null && !state.BaselineTaken && !state.BaselineSkipped)
+            {
+                state.BaselineEmberTree = UnlockBaseline.TakeBaseline(unlockedNodes).OrderBy(id => id).ToList();
+                state.BaselineWeaponMods = UnlockBaseline.TakeBaseline(unlockedMods).OrderBy(id => id).ToList();
+                state.BaselineTaken = true;
+                SaveState();
+                ArchipelagoPlugin.LogSource.LogInfo(
+                    $"New seed: {state.BaselineEmberTree.Count} Ember Tree node(s) and {state.BaselineWeaponMods.Count} " +
+                    "weapon mod(s) were already unlocked and are not checks.");
+            }
+
+            var baselineNodes = new HashSet<int>(state?.BaselineEmberTree ?? new List<int>());
+            var baselineMods = new HashSet<int>(state?.BaselineWeaponMods ?? new List<int>());
+            foreach (var id in unlockedNodes)
+            {
+                if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineNodes))
+                    CheckEmberTreeNode(id);
+            }
+            foreach (var id in unlockedMods)
+            {
+                if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineMods))
+                    CheckWeaponMod(id);
             }
         }
         catch (Exception exception)
@@ -661,6 +689,16 @@ public sealed class ConnectionService
                 loadedState = new SessionState { SlotName = slotName, Seed = seed };
             loadedState.SlotName = slotName;
             loadedState.Seed = seed;
+            // A seed that ran before the baseline existed has already reported what it was going to. Giving it a
+            // baseline now could hide a node the player bought but has not been credited for, so it is left alone.
+            if (!loadedState.BaselineTaken && !loadedState.BaselineSkipped &&
+                UnlockBaseline.SeedHasAlreadyRun(loadedState.NextItemIndex, loadedState.PendingChecks.Count))
+            {
+                loadedState.BaselineSkipped = true;
+                ArchipelagoPlugin.LogSource.LogInfo(
+                    "This seed ran before the unlock baseline existed; every unlocked Ember Tree node and weapon mod " +
+                    "is still reported as a check.");
+            }
             state = loadedState;
 
             pendingChecks.Clear();

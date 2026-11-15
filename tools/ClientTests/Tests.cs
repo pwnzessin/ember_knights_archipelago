@@ -1512,3 +1512,116 @@ public class FocusFadeTests
         Assert.Equal(before, fade.Alpha);
     }
 }
+
+public class UnlockBaselineTests
+{
+    // The five nodes the game unlocks itself on a fresh save, as seen in a real log.
+    private static readonly int[] FreshSaveNodes = { 1, 2, 3, 4, 10 };
+
+    [Fact]
+    public void NothingTheGameGaveAtTheStartIsReported()
+    {
+        var baseline = UnlockBaseline.TakeBaseline(FreshSaveNodes);
+        foreach (var id in FreshSaveNodes)
+            Assert.False(UnlockBaseline.ShouldReport(id, unlockedNow: true, baseline), $"node {id}");
+    }
+
+    [Fact]
+    public void ANodeBoughtAfterTheBaselineIsReported()
+    {
+        var baseline = UnlockBaseline.TakeBaseline(FreshSaveNodes);
+        Assert.True(UnlockBaseline.ShouldReport(5, unlockedNow: true, baseline));
+        Assert.True(UnlockBaseline.ShouldReport(33, unlockedNow: true, baseline));
+    }
+
+    [Fact]
+    public void ANodeThatIsNotUnlockedIsNeverReported()
+    {
+        var baseline = UnlockBaseline.TakeBaseline(FreshSaveNodes);
+        Assert.False(UnlockBaseline.ShouldReport(5, unlockedNow: false, baseline));
+        Assert.False(UnlockBaseline.ShouldReport(1, unlockedNow: false, baseline));
+    }
+
+    [Fact]
+    public void AnEmptyBaselineReportsEveryUnlockedNode()
+    {
+        var baseline = UnlockBaseline.TakeBaseline(Array.Empty<int>());
+        Assert.True(UnlockBaseline.ShouldReport(1, unlockedNow: true, baseline));
+        Assert.False(UnlockBaseline.ShouldReport(1, unlockedNow: false, baseline));
+    }
+
+    [Fact]
+    public void TheBaselineIsTakenOnlyUntilItHasBeenRecorded()
+    {
+        Assert.True(UnlockBaseline.NeedsBaseline(baselineTaken: false));
+        Assert.False(UnlockBaseline.NeedsBaseline(baselineTaken: true));
+    }
+
+    [Fact]
+    public void TheBaselineDoesNotChangeWhenMoreNodesAreUnlockedLater()
+    {
+        var baseline = UnlockBaseline.TakeBaseline(FreshSaveNodes);
+        var unlockedLater = FreshSaveNodes.Concat(new[] { 5, 6 }).ToList();
+        var reported = unlockedLater.Where(id => UnlockBaseline.ShouldReport(id, true, baseline)).ToList();
+        Assert.Equal(new[] { 5, 6 }, reported);
+        Assert.Equal(FreshSaveNodes.OrderBy(id => id), baseline.OrderBy(id => id));
+    }
+
+    [Fact]
+    public void ABrandNewSeedIsNotConsideredAsAlreadyRun()
+    {
+        Assert.False(UnlockBaseline.SeedHasAlreadyRun(nextItemIndex: 0, pendingCheckCount: 0));
+    }
+
+    [Theory]
+    [InlineData(12, 0)]
+    [InlineData(1, 0)]
+    [InlineData(0, 3)]
+    [InlineData(12, 3)]
+    public void ASeedThatReceivedItemsOrHoldsPendingChecksHasAlreadyRun(int nextItemIndex, int pending)
+    {
+        Assert.True(UnlockBaseline.SeedHasAlreadyRun(nextItemIndex, pending));
+    }
+
+    [Fact]
+    public void SessionStateStartsWithoutABaselineAndWithEmptyLists()
+    {
+        var state = new SessionState();
+        Assert.False(state.BaselineTaken);
+        Assert.False(state.BaselineSkipped);
+        Assert.Empty(state.BaselineEmberTree);
+        Assert.Empty(state.BaselineWeaponMods);
+    }
+
+    [Fact]
+    public void AnOldStateFileWithoutTheBaselineFieldsStillLoadsAndIsNotGivenABaselineByTheParser()
+    {
+        // A state file written by 1.2.0 or earlier has none of the baseline fields.
+        const string json = "{\"Version\":1,\"Seed\":\"123\",\"SlotName\":\"p\",\"NextItemIndex\":12,\"OrbsCollected\":0,\"RelicsRevealed\":0,\"PendingChecks\":[],\"PendingFillers\":[],\"GoalPending\":false}";
+        var state = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json)!;
+        Assert.False(state.BaselineTaken);
+        Assert.Empty(state.BaselineEmberTree);
+        // The service then sees a seed that already ran, so it marks it skipped instead of giving it a baseline.
+        Assert.True(UnlockBaseline.SeedHasAlreadyRun(state.NextItemIndex, state.PendingChecks.Count));
+    }
+
+    [Fact]
+    public void ABaselineSurvivesASaveAndLoadRoundTrip()
+    {
+        var state = new SessionState { Seed = "abc", BaselineTaken = true };
+        state.BaselineEmberTree.AddRange(FreshSaveNodes);
+        state.BaselineWeaponMods.AddRange(new[] { 3, 9 });
+        var json = System.Text.Json.JsonSerializer.Serialize(state);
+        var back = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json)!;
+        Assert.True(back.BaselineTaken);
+        Assert.Equal(FreshSaveNodes, back.BaselineEmberTree.ToArray());
+        Assert.Equal(new[] { 3, 9 }, back.BaselineWeaponMods.ToArray());
+    }
+
+    [Fact]
+    public void EveryFreshSaveNodeIsARealCatalogNodeSoTheBaselineHidesRealChecks()
+    {
+        var known = GameCatalog.Data.EmberTree.Select(node => node.DefId).ToHashSet();
+        Assert.All(FreshSaveNodes, id => Assert.Contains(id, known));
+    }
+}
