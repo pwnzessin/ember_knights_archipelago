@@ -1067,36 +1067,40 @@ public class StandardSkillTests
 
 public class LogBufferTests
 {
+    private static readonly DateTime T0 = new(2026, 11, 15, 14, 23, 0);
+
+    private static string[] Texts(IReadOnlyList<LogBuffer.Row> rows) => rows.Select(row => row.Text).ToArray();
+
     [Fact]
-    public void AddsLinesAndIgnoresBlankOnes()
+    public void AddsMessagesAndIgnoresBlankOnes()
     {
         var buffer = new LogBuffer(10);
-        Assert.True(buffer.Add("Connected."));
-        Assert.False(buffer.Add(null));
-        Assert.False(buffer.Add(""));
-        Assert.False(buffer.Add("   "));
+        Assert.True(buffer.Add("Connected.", T0));
+        Assert.False(buffer.Add(null, T0));
+        Assert.False(buffer.Add("", T0));
+        Assert.False(buffer.Add("   ", T0));
         Assert.Equal(1, buffer.Count);
     }
 
     [Fact]
-    public void DropsALineIdenticalToTheNewestButKeepsAnEarlierRepeat()
+    public void DropsAMessageIdenticalToTheNewestButKeepsAnEarlierRepeat()
     {
         var buffer = new LogBuffer(10);
-        buffer.Add("Received 5 Ash.");
-        Assert.False(buffer.Add("Received 5 Ash."));
-        buffer.Add("Check: Ember Tree: Thick Skin");
-        Assert.True(buffer.Add("Received 5 Ash."));
+        buffer.Add("Received 5 Ash.", T0);
+        Assert.False(buffer.Add("Received 5 Ash.", T0.AddMinutes(1)));
+        buffer.Add("Check: Ember Tree: Thick Skin", T0.AddMinutes(1));
+        Assert.True(buffer.Add("Received 5 Ash.", T0.AddMinutes(2)));
         Assert.Equal(3, buffer.Count);
     }
 
     [Fact]
-    public void DiscardsTheOldestLineOnceFull()
+    public void DiscardsTheOldestMessageOnceFull()
     {
         var buffer = new LogBuffer(3);
         foreach (var line in new[] { "one", "two", "three", "four" })
-            buffer.Add(line);
+            buffer.Add(line, T0);
         Assert.Equal(3, buffer.Count);
-        Assert.Equal(new[] { "two", "three", "four" }, buffer.VisibleRows(10, 40));
+        Assert.Equal(new[] { "two", "three", "four" }, Texts(buffer.VisibleRows(10, 40)));
     }
 
     [Fact]
@@ -1104,11 +1108,11 @@ public class LogBufferTests
     {
         var buffer = new LogBuffer(5);
         var start = buffer.Version;
-        buffer.Add("a");
+        buffer.Add("a", T0);
         Assert.NotEqual(start, buffer.Version);
         var afterAdd = buffer.Version;
-        buffer.Add("a");
-        buffer.Add("");
+        buffer.Add("a", T0);
+        buffer.Add("", T0);
         Assert.Equal(afterAdd, buffer.Version);
         buffer.Clear();
         Assert.NotEqual(afterAdd, buffer.Version);
@@ -1118,16 +1122,16 @@ public class LogBufferTests
     }
 
     [Fact]
-    public void ShowsTheNewestLinesWhenMoreThanFit()
+    public void ShowsTheNewestMessagesWhenMoreThanFit()
     {
         var buffer = new LogBuffer(20);
         for (var i = 1; i <= 8; i++)
-            buffer.Add($"line {i}");
-        Assert.Equal(new[] { "line 6", "line 7", "line 8" }, buffer.VisibleRows(3, 40));
+            buffer.Add($"line {i}", T0);
+        Assert.Equal(new[] { "line 6", "line 7", "line 8" }, Texts(buffer.VisibleRows(3, 40)));
     }
 
     [Fact]
-    public void WrapsLongLinesAtWordBoundaries()
+    public void WrapsLongMessagesAtWordBoundaries()
     {
         var rows = LogBuffer.Wrap("Hookshot for Link was found at Scoggfirth Room 3 Reached", 20);
         Assert.All(rows, row => Assert.True(row.Length <= 20, row));
@@ -1143,25 +1147,81 @@ public class LogBufferTests
     }
 
     [Fact]
-    public void ANewestLineThatWrapsStillAppearsInFull()
+    public void OnlyTheFirstRowOfAMessageCarriesItsTime()
     {
         var buffer = new LogBuffer(10);
-        buffer.Add("old line");
-        buffer.Add("a rather long message that needs three rows");
-        var rows = buffer.VisibleRows(4, 20);
-        Assert.True(rows.Count <= 4);
-        Assert.Equal("a rather long message that needs three rows", string.Join(" ", rows.Skip(rows.Count - 3)));
-        Assert.Equal("old line", rows[0]);
+        buffer.Add("a rather long message that needs three rows", T0);
+        var rows = buffer.VisibleRows(10, 16);
+        Assert.True(rows.Count >= 3);
+        Assert.Equal("14:23", rows[0].Time);
+        Assert.True(rows[0].StartsMessage);
+        Assert.All(rows.Skip(1), row => { Assert.Null(row.Time); Assert.False(row.StartsMessage); });
+        Assert.Equal("a rather long message that needs three rows", string.Join(" ", Texts(rows)));
     }
 
     [Fact]
-    public void WhenTheWindowIsTooSmallForTheNewestLineItsStartIsKept()
+    public void EachMessageGetsItsOwnTimeAndAContinuationNeverBecomesANewMessage()
     {
         var buffer = new LogBuffer(10);
-        buffer.Add("alpha beta gamma delta epsilon zeta eta theta iota kappa");
+        buffer.Add("first message that is long enough to wrap onto a second row", T0);
+        buffer.Add("second", T0.AddMinutes(1));
+        var rows = buffer.VisibleRows(10, 24);
+        var starts = rows.Where(row => row.StartsMessage).ToList();
+        Assert.Equal(2, starts.Count);
+        Assert.Equal(new[] { "14:23", "14:24" }, starts.Select(row => row.Time).ToArray());
+        Assert.Equal("second", rows[^1].Text);
+    }
+
+    [Fact]
+    public void ANewestMessageThatWrapsStillAppearsInFull()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("old line", T0);
+        buffer.Add("a rather long message that needs three rows", T0.AddMinutes(1));
+        var rows = buffer.VisibleRows(4, 20);
+        Assert.True(rows.Count <= 4);
+        Assert.Equal("a rather long message that needs three rows", string.Join(" ", Texts(rows).Skip(rows.Count - 3)));
+        Assert.Equal("old line", rows[0].Text);
+    }
+
+    [Fact]
+    public void WhenTheWindowIsTooSmallForTheNewestMessageItsStartIsKept()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("alpha beta gamma delta epsilon zeta eta theta iota kappa", T0);
         var rows = buffer.VisibleRows(2, 12);
         Assert.Equal(2, rows.Count);
-        Assert.StartsWith("alpha beta", rows[0]);
+        Assert.StartsWith("alpha beta", rows[0].Text);
+        Assert.True(rows[0].StartsMessage);
+    }
+
+    [Fact]
+    public void AGapBetweenMessagesIsCountedAgainstTheRowLimitAndNeverPlacedAtTheTop()
+    {
+        var buffer = new LogBuffer(20);
+        for (var i = 1; i <= 6; i++)
+            buffer.Add($"message {i}", T0);
+        // 4 rows asked for, with a gap row between messages: 3 messages (3 rows) + 2 gaps would be 5, so only 2 fit.
+        var rows = buffer.VisibleRows(4, 40, gapBetweenMessages: true);
+        var gaps = rows.Count(row => row.StartsMessage) - 1;
+        Assert.True(rows.Count + gaps <= 4, $"rows={rows.Count} gaps={gaps}");
+        Assert.Equal("message 6", rows[^1].Text);
+        Assert.Equal(new[] { "message 5", "message 6" }, Texts(rows));
+
+        var withoutGaps = buffer.VisibleRows(4, 40);
+        Assert.Equal(4, withoutGaps.Count);
+    }
+
+    [Fact]
+    public void ALongNewestMessageIsStillShownWhenGapsAreOn()
+    {
+        var buffer = new LogBuffer(10);
+        buffer.Add("older", T0);
+        buffer.Add("one two three four five six seven eight nine ten", T0.AddMinutes(1));
+        var rows = buffer.VisibleRows(3, 16, gapBetweenMessages: true);
+        Assert.Equal(3, rows.Count);
+        Assert.StartsWith("one two", rows[0].Text);
+        Assert.DoesNotContain(rows, row => row.Text == "older");
     }
 
     [Fact]
@@ -1170,21 +1230,175 @@ public class LogBufferTests
         Assert.Empty(new LogBuffer(5).VisibleRows(5, 30));
         var buffer = new LogBuffer(50);
         for (var i = 0; i < 40; i++)
-            buffer.Add($"message number {i} with some padding text to make it wrap around");
+            buffer.Add($"message number {i} with some padding text to make it wrap around", T0);
         Assert.True(buffer.VisibleRows(6, 24).Count <= 6);
+        var spaced = buffer.VisibleRows(6, 24, gapBetweenMessages: true);
+        Assert.True(spaced.Count + spaced.Count(row => row.StartsMessage) - 1 <= 6);
     }
 
     [Fact]
     public void TinyOrNonsenseDimensionsAreClamped()
     {
         var buffer = new LogBuffer(5);
-        buffer.Add("hello world");
+        buffer.Add("hello world", T0);
         Assert.NotEmpty(buffer.VisibleRows(0, 0));
-        Assert.NotEmpty(buffer.VisibleRows(-3, -3));
+        Assert.NotEmpty(buffer.VisibleRows(-3, -3, gapBetweenMessages: true));
         Assert.Equal(1, new LogBuffer(0).Count + 1);
+    }
+
+    [Fact]
+    public void TimeIsFormattedAsTwentyFourHourHoursAndMinutesRegardlessOfCulture()
+    {
+        Assert.Equal("09:05", LogBuffer.FormatTime(new DateTime(2026, 1, 2, 9, 5, 59)));
+        Assert.Equal("00:00", LogBuffer.FormatTime(new DateTime(2026, 1, 2, 0, 0, 0)));
+        Assert.Equal("23:59", LogBuffer.FormatTime(new DateTime(2026, 1, 2, 23, 59, 0)));
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("ar-SA");
+            Assert.Equal("14:23", LogBuffer.FormatTime(T0));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData("Received skill: Cyclone", "Received")]
+    [InlineData("Received 5 Ash (0/4 coins).", "Received")]
+    [InlineData("Check: Ember Tree: Thick Skin", "Sent")]
+    [InlineData("Goal achieved: Praxis.", "Sent")]
+    [InlineData("DeathLink sent.", "Sent")]
+    [InlineData("Warning: AP session state could not be saved.", "Warning")]
+    [InlineData("Set slot_name in the BepInEx configuration before connecting.", "Warning")]
+    [InlineData("The Archipelago connection closed.", "Warning")]
+    [InlineData("Could not scout upgrade locations", "Warning")]
+    [InlineData("Samus: hello everyone", "Chat")]
+    [InlineData("Connected.", "Info")]
+    [InlineData("Heat is set by Archipelago: 35 (Heat Reduction items lower it).", "Info")]
+    [InlineData("Link sent Hookshot to Samus (Scoggfirth Room 3)", "Info")]
+    public void MessagesAreTintedByTheirKind(string text, string expectedKind)
+    {
+        Assert.Equal(Enum.Parse<LogKind>(expectedKind), LogBuffer.Classify(text));
+    }
+
+    [Fact]
+    public void AChatLineNeedsAShortSingleWordNameBeforeTheColon()
+    {
+        Assert.Equal(LogKind.Chat, LogBuffer.Classify("Link: nice find"));
+        Assert.Equal(LogKind.Info, LogBuffer.Classify("Heat is set by Archipelago: 35"));
+        Assert.Equal(LogKind.Info, LogBuffer.Classify("averyveryverylongplayernamethatgoesonandon: hi"));
+        Assert.Equal(LogKind.Info, LogBuffer.Classify(": nothing before the colon"));
     }
 }
 
+public class LogFormatterTests
+{
+    private static readonly DateTime T0 = new(2026, 11, 15, 14, 23, 0);
+
+    private static IReadOnlyList<LogBuffer.Row> Rows(params (string text, DateTime time)[] messages)
+    {
+        var buffer = new LogBuffer(20);
+        foreach (var (text, time) in messages)
+            buffer.Add(text, time);
+        return buffer.VisibleRows(20, 30);
+    }
+
+    [Fact]
+    public void EveryRowJumpsToTheSameTextColumnSoWrappedRowsHangUnderTheText()
+    {
+        var rows = Rows(("a rather long message that needs a few rows to display", T0));
+        Assert.True(rows.Count >= 2);
+        var lines = LogFormatter.Build(rows, textStart: 3.4f).Split('\n');
+        Assert.Equal(rows.Count, lines.Length);
+        Assert.All(lines, line => Assert.Contains("<pos=3.4em>", line));
+        Assert.Contains("14:23", lines[0]);
+        Assert.All(lines.Skip(1), line => Assert.DoesNotContain("14:23", line));
+    }
+
+    [Fact]
+    public void TheTimeIsDimAndTheTextUsesTheColourOfItsKind()
+    {
+        var text = LogFormatter.Build(Rows(("Received skill: Cyclone", T0)));
+        Assert.Contains($"<color={LogFormatter.TimeColor}>14:23</color>", text);
+        Assert.Contains($"<color={LogFormatter.ReceivedColor}>Received skill: Cyclone</color>", text);
+        var warning = LogFormatter.Build(Rows(("Warning: AP session state could not be saved.", T0)));
+        Assert.Contains(LogFormatter.WarningColor, warning);
+    }
+
+    [Fact]
+    public void ABlankLineSeparatesMessagesOnlyWhenAsked()
+    {
+        var rows = Rows(("first", T0), ("second", T0.AddMinutes(1)));
+        Assert.DoesNotContain("\n\n", LogFormatter.Build(rows, gapBetweenMessages: false));
+        var spaced = LogFormatter.Build(rows, gapBetweenMessages: true);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(spaced, "\n\n"));
+    }
+
+    [Fact]
+    public void NoGapIsAddedInsideAMessageOrBeforeTheFirstOne()
+    {
+        var rows = Rows(("one long message that wraps over several rows for sure yes", T0));
+        var text = LogFormatter.Build(rows, gapBetweenMessages: true);
+        Assert.DoesNotContain("\n\n", text);
+        Assert.False(text.StartsWith("\n"));
+    }
+
+    [Theory]
+    [InlineData(80)]
+    [InlineData(30)]
+    [InlineData(10)]
+    public void UserTextCannotInjectMarkupIntoTheWindowAtAnyWrapWidth(int rowWidth)
+    {
+        var buffer = new LogBuffer(5);
+        buffer.Add("Mallory: <color=red>pwned</color><size=300>", T0);
+        // Narrow widths split the message across rows, even in the middle of a tag, so check every width.
+        var text = LogFormatter.Build(buffer.VisibleRows(20, rowWidth));
+        // Ordinal comparison on purpose: xUnit's Assert.DoesNotContain is culture-sensitive, and a culture-sensitive
+        // match ignores the zero-width space, so it would report a tag that TextMeshPro cannot actually see.
+        Assert.False(text.Contains("<color=red>", StringComparison.Ordinal));
+        Assert.False(text.Contains("<size=300>", StringComparison.Ordinal));
+        // After removing the formatter's own tags, no '<' may be left that is not followed by a zero-width space.
+        var withoutOwnTags = System.Text.RegularExpressions.Regex.Replace(
+            text, @"</?color(=#[0-9a-f]{6})?>|<pos=[0-9.]+em>", "");
+        for (var i = 0; i < withoutOwnTags.Length; i++)
+        {
+            if (withoutOwnTags[i] == '<')
+                Assert.True(i + 1 < withoutOwnTags.Length && withoutOwnTags[i + 1] == '\u200B', $"bare '<' at {i}: {withoutOwnTags}");
+        }
+    }
+
+    [Fact]
+    public void AnInjectedTagIsShownAsLiteralTextAtWideWidth()
+    {
+        var buffer = new LogBuffer(5);
+        buffer.Add("Mallory: <color=red>pwned</color><size=300>", T0);
+        var text = LogFormatter.Build(buffer.VisibleRows(20, 80));
+        Assert.Contains("<\u200Bcolor=red>", text);
+        Assert.Contains("<\u200Bsize=300>", text);
+    }
+
+    [Fact]
+    public void EscapeLeavesPlainTextAloneAndNeverDoublesEscapes()
+    {
+        Assert.Equal("plain text", LogFormatter.Escape("plain text"));
+        Assert.Equal("", LogFormatter.Escape(""));
+        var once = LogFormatter.Escape("a < b");
+        Assert.Equal("a <\u200B b", once);
+        // Escaping text that was already escaped only adds one more zero-width space after each '<'.
+        Assert.Equal(1, once.Count(ch => ch == '<'));
+    }
+
+    [Fact]
+    public void EveryKindHasADistinctColourThatIsNotTheTimeColour()
+    {
+        var kinds = Enum.GetValues<LogKind>();
+        var colours = kinds.Select(LogFormatter.ColorFor).ToList();
+        Assert.Equal(colours.Count, colours.Distinct().Count());
+        Assert.DoesNotContain(LogFormatter.TimeColor, colours);
+    }
+}
 public class FocusFadeTests
 {
     [Fact]

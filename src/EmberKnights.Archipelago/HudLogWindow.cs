@@ -19,7 +19,12 @@ internal sealed class HudLogWindow
     private const int Capacity = 60;
     private const float Width = 460f;
     private const float RowHeight = 17f;
-    private const int Rows = 7;
+    private const int Rows = 9;
+    /// <summary>Where message text starts, in em, so wrapped rows hang under the text instead of under the time.</summary>
+    private const float TextStartEm = 3.4f;
+    private const float LogFontSize = 12f;
+    /// <summary>Average character width as a fraction of the font size. The game's HUD font is proportional.</summary>
+    private const float AverageCharEm = 0.52f;
     private const float Margin = 12f;
     private const float FadeInSeconds = 0.25f;
     private const float FadeOutSeconds = 1.2f;
@@ -120,8 +125,11 @@ internal sealed class HudLogWindow
             if (renderedVersion != buffer.Version)
             {
                 renderedVersion = buffer.Version;
-                var rows = buffer.VisibleRows(Rows, (int)((Width - 16f) / 7f));
-                logText!.text = string.Join("\n", rows);
+                // Characters that fit beside the time column, from the font size rather than a fixed pixel guess.
+                var textWidthPx = Width - 16f - TextStartEm * LogFontSize;
+                var chars = Math.Max(12, (int)(textWidthPx / (LogFontSize * AverageCharEm)));
+                var rows = buffer.VisibleRows(Rows, chars, gapBetweenMessages: true);
+                logText!.text = LogFormatter.Build(rows, TextStartEm, gapBetweenMessages: true);
             }
         }
         catch (Exception exception)
@@ -172,9 +180,9 @@ internal sealed class HudLogWindow
         background.raycastTarget = false;
 
         statusText = MakeText("Status", rootRect, font, 14f, new Vector2(8f, -4f), new Vector2(Width - 16f, 20f));
-        logText = MakeText("Log", rootRect, font, 12f, new Vector2(8f, -26f), new Vector2(Width - 16f, Rows * RowHeight));
+        logText = MakeText("Log", rootRect, font, LogFontSize, new Vector2(8f, -26f), new Vector2(Width - 16f, Rows * RowHeight));
         logText.alignment = TextAlignmentOptions.BottomLeft;
-        logText.color = new Color(0.88f, 0.91f, 0.96f, 0.96f);
+        logText.color = Color.white;
 
         group = root.AddComponent<CanvasGroup>();
         group.alpha = 0f;
