@@ -1,0 +1,1529 @@
+{
+  "idBase": 113523000,
+  "skills": [
+    {
+      "name": "Cyclone",
+      "abilityId": 30,
+      "locationName": "Scoggfirth Miniboss Skill Tablet",
+      "region": "Scoggfirth"
+    },
+    {
+      "name": "Rupture",
+      "abilityId": 11,
+      "locationName": "Scoggfirth Boss Skill Tablet",
+      "region": "Scoggfirth"
+    },
+    {
+      "name": "Ballista",
+      "abilityId": 34,
+      "locationName": "Steadfast Citadel Miniboss Skill Tablet",
+      "region": "Steadfast Citadel"
+    },
+    {
+      "name": "Hailstone Armor",
+      "abilityId": 32,
+      "locationName": "Steadfast Citadel Boss Skill Tablet",
+      "region": "Steadfast Citadel"
+    },
+    {
+      "name": "Warrior Wisps",
+      "abilityId": 7,
+      "locationName": "Wightsbury Miniboss Skill Tablet",
+      "region": "Wightsbury"
+    },
+    {
+      "name": "Phantom Spear",
+      "abilityId": 35,
+      "locationName": "Wightsbury Boss Skill Tablet",
+      "region": "Wightsbury"
+    },
+    {
+      "name": "Seek and Destroy",
+      "abilityId": 14,
+      "locationName": "Anville Miniboss Skill Tablet",
+      "region": "Anville"
+    },
+    {
+      "name": "Judgment",
+      "abilityId": 13,
+      "locationName": "Anville Boss Skill Tablet",
+      "region": "Anville"
+    },
+    {
+      "name": "Gravity Well",
+      "abilityId": 40,
+      "locationName": "Praxis Skill Tablet",
+      "region": "Netherra"
+    },
+    {
+      "name": "Soul Siphon",
+      "abilityId": 39,
+      "locationName": "Arch Praxis Skill Tablet",
+      "region": "Architect's Realm"
+    }
+  ],
+  "fillers": [
+    {
+      "name": "1 Archipelago Coin",
+      "kind": "coin",
+      "amount": 1
+    },
+    {
+      "name": "2 Archipelago Coins",
+      "kind": "coin",
+      "amount": 2
+    },
+    {
+      "name": "3 Archipelago Coins",
+      "kind": "coin",
+      "amount": 3
+    },
+    {
+      "name": "50 Gold",
+      "kind": "gold",
+      "amount": 50
+    },
+    {
+      "name": "Enemy Ambush Trap",
+      "kind": "trap_ambush",
+      "amount": 3
+    },
+    {
+      "name": "Boss Ambush Trap",
+      "kind": "trap_boss",
+      "amount": 1
+    },
+    {
+      "name": "Praxis Arena Trap",
+      "kind": "trap_praxis",
+      "amount": 1
+    },
+    {
+      "name": "Ash",
+      "kind": "ash",
+      "amount": 5
+    }
+  ],
+  "minibosses": [
+    {
+      "name": "Guzzle Wound",
+      "enemyIds": [
+        44
+      ],
+      "region": "Scoggfirth",
+      "variant": false
+    },
+    {
+      "name": "Sanguinsucker",
+      "enemyIds": [
+        80
+      ],
+      "region": "Scoggfirth",
+      "variant": true
+    },
+    {
+      "name": "Gust",
+      "enemyIds": [
+        81
+      ],
+      "region": "Scoggfirth",
+      "variant": true
+    },
+    {
+      "name": "Plague Bringer",
+      "enemyIds": [
+        82
+      ],
+      "region": "Scoggfirth",
+      "variant": true
+    },
+    {
+      "name": "Royal Phalanx",
+      "enemyIds": [
+        10
+      ],
+      "region": "Steadfast Citadel",
+      "variant": false
+    },
+    {
+      "name": "Phalanx Bros",
+      "enemyIds": [
+        85,
+        86
+      ],
+      "region": "Steadfast Citadel",
+      "variant": true
+    },
+    {
+      "name": "Blizzard",
+      "enemyIds": [
+        83
+      ],
+      "region": "Steadfast Citadel",
+      "variant": true
+    },
+    {
+      "name": "Shield Bearer",
+      "enemyIds": [
+        84
+      ],
+      "region": "Steadfast Citadel",
+      "variant": true
+    },
+    {
+      "name": "Herald",
+      "enemyIds": [
+        22
+      ],
+      "region": "Wightsbury",
+      "variant": false
+    },
+    {
+      "name": "Beguile",
+      "enemyIds": [
+        87
+      ],
+      "region": "Wightsbury",
+      "variant": true
+    },
+    {
+      "name": "Charlatan",
+      "enemyIds": [
+        88
+      ],
+      "region": "Wightsbury",
+      "variant": true
+    },
+    {
+      "name": "Mischief",
+      "enemyIds": [
+        89
+      ],
+      "region": "Wightsbury",
+      "variant": true
+    },
+    {
+      "name": "Scrap Chief Mack",
+      "enemyIds": [
+        46
+      ],
+      "region": "Anville",
+      "variant": false
+    },
+    {
+      "name": "Overtime Scrapper",
+      "enemyIds": [
+        107
+      ],
+      "region": "Anville",
+      "variant": true
+    },
+    {
+      "name": "Cleanup Crew",
+      "enemyIds": [
+        108,
+        109
+      ],
+      "region": "Anville",
+      "variant": true
+    },
+    {
+      "name": "Demolition Manager",
+      "enemyIds": [
+        110
+      ],
+      "region": "Anville",
+      "variant": true
+    }
+  ],
+  "bosses": [
+    {
+      "name": "Skrixxa Za",
+      "enemyIds": [
+        1
+      ],
+      "region": "Scoggfirth",
+      "variant": false
+    },
+    {
+      "name": "Arachna Za",
+      "enemyIds": [
+        56
+      ],
+      "region": "Scoggfirth",
+      "variant": true
+    },
+    {
+      "name": "Igna Za",
+      "enemyIds": [
+        57
+      ],
+      "region": "Scoggfirth",
+      "variant": true
+    },
+    {
+      "name": "Lord Bruma",
+      "enemyIds": [
+        9
+      ],
+      "region": "Steadfast Citadel",
+      "variant": false
+    },
+    {
+      "name": "King Bruma",
+      "enemyIds": [
+        59
+      ],
+      "region": "Steadfast Citadel",
+      "variant": true
+    },
+    {
+      "name": "Glacial Bruma",
+      "enemyIds": [
+        60
+      ],
+      "region": "Steadfast Citadel",
+      "variant": true
+    },
+    {
+      "name": "Phantom",
+      "enemyIds": [
+        23
+      ],
+      "region": "Wightsbury",
+      "variant": false
+    },
+    {
+      "name": "Poltergeist",
+      "enemyIds": [
+        68
+      ],
+      "region": "Wightsbury",
+      "variant": true
+    },
+    {
+      "name": "Doppelganger",
+      "enemyIds": [
+        73
+      ],
+      "region": "Wightsbury",
+      "variant": true
+    },
+    {
+      "name": "Overlord Mack",
+      "enemyIds": [
+        43
+      ],
+      "region": "Anville",
+      "variant": false
+    },
+    {
+      "name": "Warlord Mack",
+      "enemyIds": [
+        74
+      ],
+      "region": "Anville",
+      "variant": true
+    },
+    {
+      "name": "Dreadlord Mack",
+      "enemyIds": [
+        78
+      ],
+      "region": "Anville",
+      "variant": true
+    },
+    {
+      "name": "Praxis",
+      "enemyIds": [],
+      "region": "Netherra",
+      "variant": false,
+      "finalGoal": "praxis"
+    },
+    {
+      "name": "Arch Praxis",
+      "enemyIds": [],
+      "region": "Architect's Realm",
+      "variant": false,
+      "finalGoal": "arch_praxis"
+    }
+  ],
+  "emberTree": [
+    {
+      "name": "Thick Skin",
+      "defId": 1,
+      "stage": 1,
+      "requiredCoins": 1
+    },
+    {
+      "name": "Regeneration",
+      "defId": 2,
+      "stage": 1,
+      "requiredCoins": 3
+    },
+    {
+      "name": "Earned Vitality",
+      "defId": 3,
+      "stage": 1,
+      "requiredCoins": 3
+    },
+    {
+      "name": "Pocket Change",
+      "defId": 4,
+      "stage": 3,
+      "requiredCoins": 9
+    },
+    {
+      "name": "Easy Money",
+      "defId": 5,
+      "stage": 3,
+      "requiredCoins": 9
+    },
+    {
+      "name": "Dividend",
+      "defId": 6,
+      "stage": 3,
+      "requiredCoins": 9
+    },
+    {
+      "name": "Earned Power",
+      "defId": 7,
+      "stage": 2,
+      "requiredCoins": 6
+    },
+    {
+      "name": "Confidence",
+      "defId": 8,
+      "stage": 4,
+      "requiredCoins": 12
+    },
+    {
+      "name": "Fury",
+      "defId": 9,
+      "stage": 4,
+      "requiredCoins": 12
+    },
+    {
+      "name": "Slayer",
+      "defId": 10,
+      "stage": 2,
+      "requiredCoins": 6
+    },
+    {
+      "name": "Giant Slayer",
+      "defId": 12,
+      "stage": 2,
+      "requiredCoins": 6
+    },
+    {
+      "name": "Relic Dice",
+      "defId": 14,
+      "stage": 6,
+      "requiredCoins": 18
+    },
+    {
+      "name": "Skill Dice",
+      "defId": 15,
+      "stage": 7,
+      "requiredCoins": 21
+    },
+    {
+      "name": "Soul Link",
+      "defId": 17,
+      "stage": 5,
+      "requiredCoins": 15
+    },
+    {
+      "name": "Second Wind",
+      "defId": 18,
+      "stage": 5,
+      "requiredCoins": 15
+    },
+    {
+      "name": "Expansion",
+      "defId": 19,
+      "stage": 9,
+      "requiredCoins": 34
+    },
+    {
+      "name": "Bonus Relic",
+      "defId": 20,
+      "stage": 10,
+      "requiredCoins": 37
+    },
+    {
+      "name": "Warm Welcome",
+      "defId": 21,
+      "stage": 4,
+      "requiredCoins": 12
+    },
+    {
+      "name": "Guardian Angel",
+      "defId": 22,
+      "stage": 5,
+      "requiredCoins": 15
+    },
+    {
+      "name": "Treasure Hunter",
+      "defId": 23,
+      "stage": 6,
+      "requiredCoins": 18
+    },
+    {
+      "name": "Keen Eye",
+      "defId": 24,
+      "stage": 6,
+      "requiredCoins": 18
+    },
+    {
+      "name": "Deep Knowledge",
+      "defId": 25,
+      "stage": 7,
+      "requiredCoins": 21
+    },
+    {
+      "name": "Expertise",
+      "defId": 26,
+      "stage": 7,
+      "requiredCoins": 21
+    },
+    {
+      "name": "Bonus Gems",
+      "defId": 27,
+      "stage": 8,
+      "requiredCoins": 24
+    },
+    {
+      "name": "Refinery",
+      "defId": 28,
+      "stage": 8,
+      "requiredCoins": 24
+    },
+    {
+      "name": "Perfection",
+      "defId": 29,
+      "stage": 8,
+      "requiredCoins": 24
+    },
+    {
+      "name": "Fortunate",
+      "defId": 30,
+      "stage": 9,
+      "requiredCoins": 34
+    },
+    {
+      "name": "Lucky Offering",
+      "defId": 31,
+      "stage": 9,
+      "requiredCoins": 34
+    },
+    {
+      "name": "Super Reroll",
+      "defId": 32,
+      "stage": 9,
+      "requiredCoins": 34
+    },
+    {
+      "name": "Ultembera",
+      "defId": 33,
+      "stage": 10,
+      "requiredCoins": 37
+    }
+  ],
+  "weaponMods": [
+    {
+      "name": "Sword Mod: Momentum",
+      "defId": 2,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Spark",
+      "defId": 3,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Thrust",
+      "defId": 4,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Slice",
+      "defId": 5,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Lunge",
+      "defId": 6,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Whirlwind",
+      "defId": 7,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Fortune",
+      "defId": 8,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Stoicism",
+      "defId": 9,
+      "weaponType": 1
+    },
+    {
+      "name": "Bow Mod: Slow Arrows",
+      "defId": 11,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Decoy",
+      "defId": 12,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Spread Shot",
+      "defId": 14,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Marked Shot",
+      "defId": 15,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Stasis Trap",
+      "defId": 16,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Volley",
+      "defId": 17,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Bomb Arrow",
+      "defId": 18,
+      "weaponType": 2
+    },
+    {
+      "name": "Staff Mod: Storm",
+      "defId": 20,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Clairvoyance",
+      "defId": 21,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Magic Orb",
+      "defId": 22,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Luminscence",
+      "defId": 23,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Focus (24)",
+      "defId": 24,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Connoisseur",
+      "defId": 25,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Wisdom",
+      "defId": 26,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Auto Orbs",
+      "defId": 27,
+      "weaponType": 4
+    },
+    {
+      "name": "Hammer Mod: Battle Rhythm",
+      "defId": 29,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Knock Out",
+      "defId": 30,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Combat Slam",
+      "defId": 32,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Fissure",
+      "defId": 33,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Defiance",
+      "defId": 34,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Safeguard",
+      "defId": 35,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Detonate",
+      "defId": 36,
+      "weaponType": 3
+    },
+    {
+      "name": "Star Mod: Live Wire",
+      "defId": 37,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Stimulated",
+      "defId": 38,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Hefty",
+      "defId": 39,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Proficiency",
+      "defId": 40,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Shadow Strike",
+      "defId": 41,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Sluggish",
+      "defId": 42,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Serrated",
+      "defId": 43,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Burgeoning",
+      "defId": 45,
+      "weaponType": 5
+    },
+    {
+      "name": "Reaper Mod: Refill",
+      "defId": 46,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Summoner",
+      "defId": 47,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Shroud",
+      "defId": 48,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Chain Combo",
+      "defId": 49,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Resolve",
+      "defId": 50,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Infuse",
+      "defId": 51,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Dazing Slash",
+      "defId": 53,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Freezing Slash",
+      "defId": 54,
+      "weaponType": 6
+    },
+    {
+      "name": "Sword Mod: Stagger",
+      "defId": 55,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Flurry",
+      "defId": 56,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Smite",
+      "defId": 57,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Pyrostrike",
+      "defId": 58,
+      "weaponType": 1
+    },
+    {
+      "name": "Sword Mod: Spin Attack",
+      "defId": 59,
+      "weaponType": 1
+    },
+    {
+      "name": "Staff Mod: Overflow",
+      "defId": 60,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Magic Orbs",
+      "defId": 61,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Spell Siphon",
+      "defId": 62,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Focus (63)",
+      "defId": 63,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Imbuement",
+      "defId": 64,
+      "weaponType": 4
+    },
+    {
+      "name": "Staff Mod: Arcane Mastery",
+      "defId": 65,
+      "weaponType": 4
+    },
+    {
+      "name": "Reaper Mod: Lacerate",
+      "defId": 66,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Hidden Blade",
+      "defId": 67,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Necromancy",
+      "defId": 68,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Piercing Slash",
+      "defId": 69,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Split Slash",
+      "defId": 70,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Phantasm",
+      "defId": 71,
+      "weaponType": 6
+    },
+    {
+      "name": "Reaper Mod: Reserve",
+      "defId": 72,
+      "weaponType": 6
+    },
+    {
+      "name": "Bow Mod: Opportunist",
+      "defId": 73,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Ricochet",
+      "defId": 74,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Perfectionist",
+      "defId": 75,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Explosive Arrows",
+      "defId": 76,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Invigorate",
+      "defId": 77,
+      "weaponType": 2
+    },
+    {
+      "name": "Bow Mod: Empowered Arrows",
+      "defId": 78,
+      "weaponType": 2
+    },
+    {
+      "name": "Hammer Mod: Heavy Blow",
+      "defId": 79,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Defensive Stance",
+      "defId": 80,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Volcanic Rift",
+      "defId": 82,
+      "weaponType": 3
+    },
+    {
+      "name": "Hammer Mod: Overcharge",
+      "defId": 83,
+      "weaponType": 3
+    },
+    {
+      "name": "Star Mod: Dual Strike",
+      "defId": 84,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Precision",
+      "defId": 85,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Persistence",
+      "defId": 86,
+      "weaponType": 5
+    },
+    {
+      "name": "Star Mod: Sharpened",
+      "defId": 87,
+      "weaponType": 5
+    },
+    {
+      "name": "Dark Cap Mod: Orb Spray",
+      "defId": 88,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Orb Weaver",
+      "defId": 89,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Laser Focus",
+      "defId": 90,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Dark Spell: Celestial Tear",
+      "defId": 92,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Dark Spell: Darkening",
+      "defId": 93,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Ghostly Image",
+      "defId": 94,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Phantom Pulse",
+      "defId": 95,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Black Rainbow",
+      "defId": 96,
+      "weaponType": 7
+    },
+    {
+      "name": "Dark Cap Mod: Void Field",
+      "defId": 97,
+      "weaponType": 7
+    }
+  ],
+  "roomMilestones": [
+    {
+      "world": "Scoggfirth",
+      "areaName": 1,
+      "room": 1
+    },
+    {
+      "world": "Scoggfirth",
+      "areaName": 1,
+      "room": 3
+    },
+    {
+      "world": "Scoggfirth",
+      "areaName": 1,
+      "room": 5
+    },
+    {
+      "world": "Scoggfirth",
+      "areaName": 1,
+      "room": 7
+    },
+    {
+      "world": "Steadfast Citadel",
+      "areaName": 2,
+      "room": 1
+    },
+    {
+      "world": "Steadfast Citadel",
+      "areaName": 2,
+      "room": 3
+    },
+    {
+      "world": "Steadfast Citadel",
+      "areaName": 2,
+      "room": 5
+    },
+    {
+      "world": "Steadfast Citadel",
+      "areaName": 2,
+      "room": 7
+    },
+    {
+      "world": "Wightsbury",
+      "areaName": 3,
+      "room": 1
+    },
+    {
+      "world": "Wightsbury",
+      "areaName": 3,
+      "room": 3
+    },
+    {
+      "world": "Wightsbury",
+      "areaName": 3,
+      "room": 5
+    },
+    {
+      "world": "Wightsbury",
+      "areaName": 3,
+      "room": 7
+    },
+    {
+      "world": "Anville",
+      "areaName": 4,
+      "room": 1
+    },
+    {
+      "world": "Anville",
+      "areaName": 4,
+      "room": 3
+    },
+    {
+      "world": "Anville",
+      "areaName": 4,
+      "room": 5
+    },
+    {
+      "world": "Anville",
+      "areaName": 4,
+      "room": 7
+    },
+    {
+      "world": "Netherra",
+      "areaName": 5,
+      "room": 1
+    },
+    {
+      "world": "Netherra",
+      "areaName": 5,
+      "room": 3
+    }
+  ],
+  "relicOrbs": [
+    {
+      "order": 1,
+      "defId": 48,
+      "name": "Spirit Shelter"
+    },
+    {
+      "order": 2,
+      "defId": 40,
+      "name": "Chronograph"
+    },
+    {
+      "order": 3,
+      "defId": 155,
+      "name": "Spell in a Bottle"
+    },
+    {
+      "order": 4,
+      "defId": 80,
+      "name": "Steward's Toolbox"
+    },
+    {
+      "order": 5,
+      "defId": 131,
+      "name": "Call to Arms"
+    },
+    {
+      "order": 6,
+      "defId": 152,
+      "name": "Titan's Wargear"
+    },
+    {
+      "order": 7,
+      "defId": 128,
+      "name": "Juicy Opal"
+    },
+    {
+      "order": 8,
+      "defId": 61,
+      "name": "General's Sabre"
+    },
+    {
+      "order": 9,
+      "defId": 112,
+      "name": "Wizard's Fleece"
+    },
+    {
+      "order": 10,
+      "defId": 148,
+      "name": "Shivering Touch"
+    },
+    {
+      "order": 11,
+      "defId": 86,
+      "name": "Kindleblade"
+    },
+    {
+      "order": 12,
+      "defId": 93,
+      "name": "Tundra Boots"
+    },
+    {
+      "order": 13,
+      "defId": 102,
+      "name": "Burning Resolve"
+    },
+    {
+      "order": 14,
+      "defId": 118,
+      "name": "Chilling Wind"
+    },
+    {
+      "order": 15,
+      "defId": 138,
+      "name": "Thundering Hammer"
+    },
+    {
+      "order": 16,
+      "defId": 109,
+      "name": "Stun Powder"
+    },
+    {
+      "order": 17,
+      "defId": 147,
+      "name": "Glacial Light"
+    },
+    {
+      "order": 18,
+      "defId": 99,
+      "name": "Vital Convergence"
+    },
+    {
+      "order": 19,
+      "defId": 84,
+      "name": "Onyx Raven"
+    },
+    {
+      "order": 20,
+      "defId": 153,
+      "name": "Red Dwarf"
+    },
+    {
+      "order": 21,
+      "defId": 107,
+      "name": "Lethargic Brew"
+    },
+    {
+      "order": 22,
+      "defId": 85,
+      "name": "Bitter Chisel"
+    },
+    {
+      "order": 23,
+      "defId": 127,
+      "name": "Helix Sign"
+    },
+    {
+      "order": 24,
+      "defId": 92,
+      "name": "Gilded Remains"
+    },
+    {
+      "order": 25,
+      "defId": 154,
+      "name": "Razor Claw"
+    },
+    {
+      "order": 26,
+      "defId": 137,
+      "name": "Withercore"
+    },
+    {
+      "order": 27,
+      "defId": 116,
+      "name": "Frostbite"
+    },
+    {
+      "order": 28,
+      "defId": 111,
+      "name": "Fury Charm"
+    },
+    {
+      "order": 29,
+      "defId": 159,
+      "name": "Trusty Wizard's Hat"
+    },
+    {
+      "order": 30,
+      "defId": 81,
+      "name": "Harvest Scythe"
+    },
+    {
+      "order": 31,
+      "defId": 83,
+      "name": "Tainted Conduit"
+    },
+    {
+      "order": 32,
+      "defId": 132,
+      "name": "Steel Greaves"
+    },
+    {
+      "order": 33,
+      "defId": 72,
+      "name": "Balanced Landing"
+    },
+    {
+      "order": 34,
+      "defId": 31,
+      "name": "Bronze Rat"
+    },
+    {
+      "order": 35,
+      "defId": 113,
+      "name": "Ignition Break"
+    },
+    {
+      "order": 36,
+      "defId": 136,
+      "name": "Archangel's Scythe"
+    },
+    {
+      "order": 37,
+      "defId": 126,
+      "name": "Storm Ward"
+    },
+    {
+      "order": 38,
+      "defId": 108,
+      "name": "Hunter Grasp"
+    },
+    {
+      "order": 39,
+      "defId": 34,
+      "name": "Barrier Pendant"
+    },
+    {
+      "order": 40,
+      "defId": 160,
+      "name": "Traumatic Blow"
+    },
+    {
+      "order": 41,
+      "defId": 59,
+      "name": "Infernal Scale"
+    },
+    {
+      "order": 42,
+      "defId": 158,
+      "name": "Smoldering Toxin"
+    },
+    {
+      "order": 43,
+      "defId": 114,
+      "name": "Frost Needle"
+    },
+    {
+      "order": 44,
+      "defId": 124,
+      "name": "Shock Troop"
+    },
+    {
+      "order": 45,
+      "defId": 149,
+      "name": "Infested Mind"
+    },
+    {
+      "order": 46,
+      "defId": 169,
+      "name": "Creature's Bond"
+    },
+    {
+      "order": 47,
+      "defId": 180,
+      "name": "Spark Ring"
+    },
+    {
+      "order": 48,
+      "defId": 181,
+      "name": "Shocking Revelation"
+    },
+    {
+      "order": 49,
+      "defId": 191,
+      "name": "Black Ice"
+    },
+    {
+      "order": 50,
+      "defId": 192,
+      "name": "Lethal Venom"
+    },
+    {
+      "order": 51,
+      "defId": 193,
+      "name": "Impure Pestilence"
+    },
+    {
+      "order": 52,
+      "defId": 194,
+      "name": "Cryo Freeze"
+    },
+    {
+      "order": 53,
+      "defId": 183,
+      "name": "Eye of the Storm"
+    }
+  ],
+  "heat": {
+    "maxHeat": 55,
+    "modifiers": [
+      {
+        "id": 1,
+        "name": "Hulking",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Haste",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Ruin",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Onslaught",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Horde",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 6,
+        "name": "Malice",
+        "kind": "bits",
+        "costs": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "id": 7,
+        "name": "Pantheon",
+        "kind": "bits",
+        "costs": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "id": 8,
+        "name": "Challenger",
+        "kind": "toggle",
+        "costs": [
+          3
+        ]
+      },
+      {
+        "id": 9,
+        "name": "Doused",
+        "kind": "toggle",
+        "costs": [
+          3
+        ]
+      },
+      {
+        "id": 10,
+        "name": "Fragile",
+        "kind": "toggle",
+        "costs": [
+          3
+        ]
+      },
+      {
+        "id": 11,
+        "name": "Sealed",
+        "kind": "toggle",
+        "costs": [
+          3
+        ]
+      },
+      {
+        "id": 12,
+        "name": "Inflation",
+        "kind": "bits",
+        "costs": [
+          1,
+          1
+        ]
+      },
+      {
+        "id": 13,
+        "name": "Blitz",
+        "kind": "level",
+        "costs": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "id": 14,
+        "name": "Tyrant",
+        "kind": "bits",
+        "costs": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "id": 15,
+        "name": "Aficionado",
+        "kind": "level",
+        "costs": [
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "id": 16,
+        "name": "Shared Fate",
+        "kind": "toggle",
+        "costs": [
+          3
+        ],
+        "unsafe": "Shared Fate shares damage between players and only applies to multiplayer."
+      },
+      {
+        "id": 17,
+        "name": "Chaos",
+        "kind": "toggle",
+        "costs": [
+          3
+        ],
+        "unsafe": "Chaos randomizes the world order, which would break the world-order logic and room milestones."
+      }
+    ]
+  },
+  "weapons": [
+    {
+      "name": "Guardian Bow",
+      "weaponId": 2
+    },
+    {
+      "name": "Nexal Staff",
+      "weaponId": 4
+    },
+    {
+      "name": "Rift Hammer",
+      "weaponId": 3
+    },
+    {
+      "name": "Razor Wind",
+      "weaponId": 5
+    },
+    {
+      "name": "Reaper's Toll",
+      "weaponId": 6
+    },
+    {
+      "name": "Void Mantle",
+      "weaponId": 7
+    }
+  ]
+}

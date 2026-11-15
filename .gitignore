@@ -1,0 +1,55 @@
+# Build output
+bin/
+obj/
+build/
+
+# Local toolchains and vendored dependencies (build.ps1 / test.ps1 expect these under tools/)
+tools/bepinex/
+tools/dotnet/
+tools/dotnet-tools/
+tools/python/
+tools/python-ap/
+tools/python-runtimes/
+tools/uv-cache/
+tools/archipelago-0.6.8/
+tools/archipelago-source/
+downloads/
+
+# Anything derived from the game's files must never be committed.
+# Recovered interop assemblies, decompiled code, and data extracted from game assets:
+tools/interop/
+tools/interop-inspect/
+tools/decompiled/
+tools/InteropDump/
+tools/extracted-*.json
+tools/relic-dump.json
+*.assets
+*.bundle
+*.dat
+
+# Game and loader binaries
+*.dll
+*.exe
+*.pdb
+*.apworld
+
+# Local config and per-slot session state (contain host, slot name, seed)
+*.cfg
+state/
+
+# Archipelago generation output and logs.
+# Note: "*.archipelago" would also match the src/EmberKnights.Archipelago/ directory, so seed
+# files are matched by their generated name instead.
+AP_*.archipelago
+AP_*_Spoiler.txt
+AP_*.zip
+*.log
+
+# Python / editor noise
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.vs/
+.vscode/
+.idea/

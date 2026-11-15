@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>EmberKnights.Archipelago.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Pure logic only; no game or BepInEx assemblies are needed. -->
+    <Compile Include="..\..\src\EmberKnights.Archipelago\Catalog.cs" Link="Catalog.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\HeatSolver.cs" Link="HeatSolver.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\RoomProgressTracker.cs" Link="RoomProgressTracker.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\RelicOrbPolicy.cs" Link="RelicOrbPolicy.cs" />
+    <EmbeddedResource Include="..\..\apworld\ember_knights\catalog.json" LogicalName="EmberKnights.Archipelago.catalog.json" />
+  </ItemGroup>
+</Project>
