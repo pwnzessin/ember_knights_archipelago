@@ -11,6 +11,8 @@ Both are on the [Releases page](../../releases). The APWorld is released separat
 
 > **Status: v1.2, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush, Daily Dungeon and DLC encounters are outside the tested scope. See [Known issues](#known-issues).
 
+> **AI disclosure:** this project was basically fully vibe-coded; I only reviewed and tested the results in the game and inside of Archipelago lobbies. It has only been playtested a few times. Expect bugs, and any reports about issues you find are greatly appreciated.
+
 **Not affiliated.** This is a fan project. It is not affiliated with, endorsed by, or supported by Doom Turtle, Twin Sails Interactive, or Archipelago. "Ember Knights" and related names belong to their owners. You need your own copy of the game, and no game files are included.
 
 ## Install
