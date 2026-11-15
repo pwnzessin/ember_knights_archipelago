@@ -9,7 +9,7 @@ An unofficial [Archipelago](https://archipelago.gg) multiworld integration for *
 
 Both are on the [Releases page](../../releases). The APWorld is released separately under tags named `apworld-vX.Y.Z`, because it does not change in every plugin release. Use the newest of each.
 
-> **Status: v1.3, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
+> **Status: v1.4, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
 
 > **AI disclosure:** this project was basically fully vibe-coded; I only reviewed and tested the results in the game and inside of Archipelago lobbies. It has only been playtested a few times. Expect bugs, and any reports about issues you find are greatly appreciated.
 

@@ -11,7 +11,7 @@ public sealed class ArchipelagoPlugin : BasePlugin
 {
     public const string PluginGuid = "com.emberknights.archipelago";
     public const string PluginName = "Ember Knights Archipelago";
-    public const string PluginVersion = "1.3.0";
+    public const string PluginVersion = "1.4.0";
 
     public static ArchipelagoPlugin Instance { get; private set; } = null!;
     public static ManualLogSource LogSource => Instance.Log;
