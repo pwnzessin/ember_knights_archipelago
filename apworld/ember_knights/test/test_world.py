@@ -243,6 +243,190 @@ class TestStandardSkillCatalogContract(unittest.TestCase):
         self.assertEqual(7, StartingStandardSkills.range_end)
         self.assertEqual(3, StartingStandardSkills.default)
 
+
+def expected_dlc_location_count(boss_variants: bool) -> int:
+    encounters = [*CATALOG.dlc_minibosses, *CATALOG.dlc_bosses]
+    if not boss_variants:
+        encounters = [encounter for encounter in encounters if not encounter.variant]
+    return (
+        len(CATALOG.dlc_skills)
+        + len(encounters)
+        + len(CATALOG.dlc_weapon_mods)
+        + len(CATALOG.dlc_room_milestones)
+        + len(CATALOG.dlc_relic_orbs)
+    )
+
+
+class TestDlcOffByDefault(EmberKnightsTestBase):
+    options = {}
+
+    def test_default_seed_has_no_dlc_locations_items_or_regions(self) -> None:
+        # The default seed must be exactly the 1.2.0 seed: 228 locations, no DLC anything.
+        locations = regular_locations(self)
+        self.assertEqual(228, len(locations))
+        dlc_names = self.world.location_name_groups["DLC"]
+        self.assertFalse({location.name for location in locations} & dlc_names)
+        dlc_items = (
+            {skill.name for skill in CATALOG.dlc_skills}
+            | {weapon.name for weapon in CATALOG.dlc_weapons}
+            | {orb.name for orb in CATALOG.dlc_relic_orbs}
+        )
+        pool = {item.name for item in self.multiworld.itempool}
+        self.assertFalse(pool & dlc_items)
+        self.assertFalse({region.name for region in self.multiworld.get_regions(self.player)} & set(CATALOG.dlc_regions))
+        self.assertIs(False, self.world.fill_slot_data()["dlc"])
+        self.assertFalse(self.world.options.dlc)
+
+
+class TestDlcOn(EmberKnightsTestBase):
+    options = {"dlc": True}
+
+    def test_counts_and_item_pool_include_the_dlc(self) -> None:
+        locations = regular_locations(self)
+        self.assertEqual(expected_location_count(True) + expected_dlc_location_count(True), len(locations))
+        self.assertEqual(len(locations), len(self.multiworld.itempool))
+        self.assertIs(True, self.world.fill_slot_data()["dlc"])
+
+    def test_every_dlc_check_exists_and_has_its_own_id(self) -> None:
+        names = {location.name: location.address for location in regular_locations(self)}
+        for name in self.world.location_name_groups["DLC"]:
+            self.assertIn(name, names, name)
+            self.assertEqual(CATALOG.location_name_to_id[name], names[name])
+
+    def test_dlc_skills_weapons_and_orb_relics_are_items_exactly_once(self) -> None:
+        pool = [item.name for item in self.multiworld.itempool]
+        for name in (
+            [skill.name for skill in CATALOG.dlc_skills]
+            + [weapon.name for weapon in CATALOG.dlc_weapons]
+            + [orb.name for orb in CATALOG.dlc_relic_orbs]
+        ):
+            self.assertEqual(1, pool.count(name), name)
+
+    def test_dlc_orbs_continue_the_base_numbering(self) -> None:
+        names = [orb.location_name for orb in CATALOG.dlc_relic_orbs]
+        self.assertEqual(
+            [f"Relic Orb {number}" for number in range(len(CATALOG.relic_orbs) + 1, len(CATALOG.relic_orbs) + 11)], names
+        )
+
+    def test_dlc_weapons_are_never_starting_weapons(self) -> None:
+        dlc_ids = {weapon.weapon_id for weapon in CATALOG.dlc_weapons}
+        self.assertFalse(dlc_ids & set(self.world.starting_weapon_ids))
+
+    def test_dlc_weapon_mods_need_their_weapon(self) -> None:
+        state = CollectionState(self.multiworld)
+        locked = [location for location in regular_locations(self) if location.name in {mod.location_name for mod in CATALOG.dlc_weapon_mods}]
+        self.assertTrue(locked)
+        # With nothing collected, no DLC mod check is reachable.
+        for location in locked:
+            self.assertFalse(location.can_reach(state), location.name)
+        for weapon in CATALOG.dlc_weapons:
+            state.collect(self.world.create_item(weapon.name), prevent_sweep=True)
+        for location in locked:
+            self.assertTrue(location.can_reach(state), location.name)
+
+    def test_dlc_chain_is_gated_by_steadfast_citadel_then_each_previous_dlc_clear(self) -> None:
+        state = CollectionState(self.multiworld)
+        first = self.multiworld.get_region(CATALOG.dlc_regions[0], self.player)
+        self.assertFalse(first.can_reach(state))
+        # Steadfast Citadel itself needs Scoggfirth's clear, so the DLC is not open before the base chain gets that far.
+        state.prog_items[self.player]["Scoggfirth Clear"] = 1
+        state.update_reachable_regions(self.player)
+        self.assertFalse(first.can_reach(state), "the first DLC world opened before Steadfast Citadel was cleared")
+        # Steadfast Citadel's clear then opens the first DLC world; each later one needs the previous DLC clear.
+        state.prog_items[self.player]["Steadfast Citadel Clear"] = 1
+        previous = None
+        for name in CATALOG.dlc_regions:
+            region = self.multiworld.get_region(name, self.player)
+            if previous is not None:
+                self.assertFalse(region.can_reach(state), f"{name} reachable before {previous} was cleared")
+                state.prog_items[self.player][f"{previous} Clear"] = 1
+            state.update_reachable_regions(self.player)
+            self.assertTrue(region.can_reach(state), name)
+            previous = name
+
+    def test_the_goal_is_unchanged_by_the_dlc(self) -> None:
+        self.assertEqual("praxis", self.world.fill_slot_data()["goal"])
+        self.assertIn("Netherra", {region.name for region in self.multiworld.get_regions(self.player)})
+
+
+class TestDlcOnWithoutBossVariants(EmberKnightsTestBase):
+    options = {"dlc": True, "boss_variants": False}
+
+    def test_the_architect_variant_is_dropped_with_the_other_variants(self) -> None:
+        names = {location.name for location in regular_locations(self)}
+        self.assertNotIn("The Architect Reborn Defeated", names)
+        self.assertIn("The Architect Defeated", names)
+        self.assertEqual(expected_location_count(False) + expected_dlc_location_count(False), len(names))
+
+
+class TestDlcCatalogContract(unittest.TestCase):
+    def test_dlc_ids_never_collide_with_or_move_any_base_id(self) -> None:
+        base = CATALOG.id_base
+        dlc_items = (
+            [CATALOG.dlc_skill_item_id(i) for i in range(len(CATALOG.dlc_skills))]
+            + [CATALOG.dlc_weapon_item_id(i) for i in range(len(CATALOG.dlc_weapons))]
+            + [CATALOG.dlc_relic_item_id(i) for i in range(len(CATALOG.dlc_relic_orbs))]
+        )
+        dlc_locations = (
+            [CATALOG.dlc_skill_location_id(i) for i in range(len(CATALOG.dlc_skills))]
+            + [CATALOG.dlc_miniboss_location_id(i) for i in range(len(CATALOG.dlc_minibosses))]
+            + [CATALOG.dlc_boss_location_id(i) for i in range(len(CATALOG.dlc_bosses))]
+            + [CATALOG.dlc_weapon_mod_location_id(i) for i in range(len(CATALOG.dlc_weapon_mods))]
+            + [CATALOG.dlc_room_milestone_location_id(i) for i in range(len(CATALOG.dlc_room_milestones))]
+            + [CATALOG.dlc_relic_orb_location_id(i) for i in range(len(CATALOG.dlc_relic_orbs))]
+        )
+        base_items = (
+            [CATALOG.skill_item_id(i) for i in range(len(CATALOG.skills))]
+            + [CATALOG.standard_skill_item_id(i) for i in range(len(CATALOG.standard_skills))]
+            + [CATALOG.weapon_item_id(i) for i in range(len(CATALOG.weapons))]
+            + [CATALOG.filler_item_id(i) for i in range(len(CATALOG.fillers))]
+            + [CATALOG.relic_item_id(i) for i in range(len(CATALOG.relic_orbs))]
+            + [CATALOG.heat_reduction_item_id()]
+        )
+        base_locations = (
+            [CATALOG.skill_location_id(i) for i in range(len(CATALOG.skills))]
+            + [CATALOG.miniboss_location_id(i) for i in range(len(CATALOG.minibosses))]
+            + [CATALOG.boss_location_id(i) for i in range(len(CATALOG.bosses))]
+            + [CATALOG.ember_tree_location_id(i) for i in range(len(CATALOG.ember_tree))]
+            + [CATALOG.weapon_mod_location_id(i) for i in range(len(CATALOG.weapon_mods))]
+            + [CATALOG.room_milestone_location_id(i) for i in range(len(CATALOG.room_milestones))]
+            + [CATALOG.relic_orb_location_id(i) for i in range(len(CATALOG.relic_orbs))]
+        )
+        self.assertFalse(set(dlc_items) & set(base_items))
+        self.assertFalse(set(dlc_locations) & set(base_locations))
+        self.assertEqual(len(dlc_items), len(set(dlc_items)))
+        self.assertEqual(len(dlc_locations), len(set(dlc_locations)))
+        # The base ids are exactly where 1.2.0 put them.
+        self.assertEqual(base + 1, CATALOG.skill_item_id(0))
+        self.assertEqual(base + 7000, CATALOG.relic_orb_location_id(0))
+        self.assertEqual(base + 7052, CATALOG.relic_orb_location_id(52))
+
+    def test_dlc_data_matches_what_the_game_reported(self) -> None:
+        # Counts read from the in-game dump: 9 selector skills + the Architect pair is 10 tablets (Gun Ammo is not a tablet).
+        self.assertEqual(10, len(CATALOG.dlc_skills))
+        self.assertEqual(2, len(CATALOG.dlc_weapons))
+        self.assertEqual(10, len(CATALOG.dlc_relic_orbs))
+        self.assertEqual(4, len(CATALOG.dlc_minibosses))
+        self.assertEqual(6, len(CATALOG.dlc_bosses))
+        # 20 DLC mods minus the always-unlocked Gun 1-1.
+        self.assertEqual(19, len(CATALOG.dlc_weapon_mods))
+        self.assertEqual({8, 9}, {weapon.weapon_id for weapon in CATALOG.dlc_weapons})
+        self.assertEqual(list(range(211, 221)), [orb.def_id for orb in CATALOG.dlc_relic_orbs])
+
+    def test_dlc_enemy_ids_do_not_overlap_the_base_ones(self) -> None:
+        base = {enemy for encounter in [*CATALOG.minibosses, *CATALOG.bosses] for enemy in encounter.enemy_ids}
+        dlc = [enemy for encounter in [*CATALOG.dlc_minibosses, *CATALOG.dlc_bosses] for enemy in encounter.enemy_ids]
+        self.assertFalse(base & set(dlc))
+        self.assertEqual(len(dlc), len(set(dlc)))
+
+    def test_dlc_ability_ids_do_not_overlap_base_skills(self) -> None:
+        base = {skill.ability_id for skill in CATALOG.skills} | {skill.ability_id for skill in CATALOG.standard_skills}
+        self.assertFalse(base & {skill.ability_id for skill in CATALOG.dlc_skills})
+
+    def test_the_dlc_option_defaults_to_off(self) -> None:
+        from ..options import Dlc
+
+        self.assertEqual(0, Dlc.default)
 class TestCatalogContract(unittest.TestCase):
     def test_ids_and_names_are_unique(self) -> None:
         self.assertEqual(
@@ -251,7 +435,10 @@ class TestCatalogContract(unittest.TestCase):
             + len(CATALOG.weapons)
             + len(CATALOG.relic_orbs)
             + len(CATALOG.fillers)
-            + 1,
+            + 1
+            + len(CATALOG.dlc_skills)
+            + len(CATALOG.dlc_weapons)
+            + len(CATALOG.dlc_relic_orbs),
             len(CATALOG.item_name_to_id),
         )
         self.assertEqual(
@@ -261,7 +448,13 @@ class TestCatalogContract(unittest.TestCase):
             + len(CATALOG.ember_tree)
             + len(CATALOG.weapon_mods)
             + len(CATALOG.room_milestones)
-            + len(CATALOG.relic_orbs),
+            + len(CATALOG.relic_orbs)
+            + len(CATALOG.dlc_skills)
+            + len(CATALOG.dlc_minibosses)
+            + len(CATALOG.dlc_bosses)
+            + len(CATALOG.dlc_weapon_mods)
+            + len(CATALOG.dlc_room_milestones)
+            + len(CATALOG.dlc_relic_orbs),
             len(CATALOG.location_name_to_id),
         )
         self.assertEqual(len(CATALOG.item_name_to_id), len(set(CATALOG.item_name_to_id.values())))

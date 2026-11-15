@@ -21,7 +21,7 @@ source = Path(sys.modules[world.__module__].__file__ or "")
 if ".apworld" not in str(source):
     raise SystemExit(f"Ember Knights loaded from {source}, not from the packaged .apworld archive.")
 
-if len(world.location_name_to_id) != 228 or len(world.item_name_to_id) != 85:
+# The data package lists every name the world can create. That is the base game (228 locations, 85 items) plus the DLC\n# (67 locations, 22 items), whether or not a player turns the DLC option on.\nif len(world.location_name_to_id) != 295 or len(world.item_name_to_id) != 107:
     raise SystemExit(
         f"Unexpected data: {len(world.location_name_to_id)} locations, {len(world.item_name_to_id)} items."
     )

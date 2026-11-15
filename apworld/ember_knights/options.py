@@ -12,6 +12,20 @@ class Goal(Choice):
     default = 0
 
 
+class Dlc(Toggle):
+    """Include the Wrath of the Architect DLC.
+
+    Adds the four altered worlds (Mystic Forest, Inferno Bastille, Feudal Village, Utopic Labs) and the Architect level:
+    their minibosses and bosses, ten skill tablets, thirteen to nineteen weapon mods for the Hyper Gloves and the Ember
+    Buster, ten more relic orbs, and room milestones, as checks, with the new skills, weapons and relics as items.
+
+    You must own the DLC. The DLC worlds are an alternate path you choose at the start of a run, so the base worlds and
+    the DLC worlds can be played in any order. Off by default.
+    """
+
+    display_name = "Wrath of the Architect DLC"
+
+
 class BossVariants(DefaultOnToggle):
     """Include checks for alternate minibosses and world bosses."""
 
@@ -166,6 +180,7 @@ class DeathLink(Toggle):
 @dataclass
 class EmberKnightsOptions(PerGameCommonOptions):
     goal: Goal
+    dlc: Dlc
     boss_variants: BossVariants
     start_heat: StartHeat
     minimum_heat: MinimumHeat

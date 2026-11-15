@@ -9,7 +9,7 @@ An unofficial [Archipelago](https://archipelago.gg) multiworld integration for *
 
 Both are on the [Releases page](../../releases). The APWorld is released separately under tags named `apworld-vX.Y.Z`, because it does not change in every plugin release. Use the newest of each.
 
-> **Status: v1.3, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush, Daily Dungeon and DLC encounters are outside the tested scope. See [Known issues](#known-issues).
+> **Status: v1.3, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
 
 > **AI disclosure:** this project was basically fully vibe-coded; I only reviewed and tested the results in the game and inside of Archipelago lobbies. It has only been playtested a few times. Expect bugs, and any reports about issues you find are greatly appreciated.
 
@@ -83,6 +83,7 @@ These go in your player YAML under `Ember Knights:`. Defaults are in brackets.
 | Option | Values | What it does |
 | --- | --- | --- |
 | `goal` | `praxis` [default], `arch_praxis` | The boss that completes your world. |
+| `dlc` | on / off [default] | Include the Wrath of the Architect DLC: its four altered worlds and the Architect level, their minibosses and bosses, ten skill tablets, nineteen Hyper Gloves and Ember Buster weapon mods, ten more relic orbs and room milestones as checks, with the new skills, weapons and relics as items. **You must own the DLC.** See [DLC support](#dlc-support). |
 | `boss_variants` | on [default] / off | Include checks for alternate minibosses and world bosses. |
 | `start_heat` | 0-55 [25] | Starting difficulty in the game's modifier points. |
 | `minimum_heat` | 0-55 [15] | Floor that Heat Reduction items cannot go below. 15 is required for the Arch Praxis fight. |
@@ -128,6 +129,34 @@ The `Gameplay` settings are fallbacks for seeds that do not carry the value. For
 
 If you upgrade from an older version, BepInEx leaves settings it no longer knows about in the file. They are harmless, and you can delete them.
 
+## DLC support
+
+Set `dlc: true` in your YAML to include **Wrath of the Architect**. It is off by default, and a seed made with it off is identical to one from before the DLC was supported. You must own the DLC, and the APWorld and the client mod both need to be 1.4.0 or newer.
+
+With it on, the seed adds these checks:
+
+| Checks | Count |
+| --- | --- |
+| Minibosses (Geode, Fire Dancer, Daimyo Ghost, Fly Hatcher) | 4 |
+| Bosses (Oukranos, Lady Inferna, The Kasumi Clan, Terrorbyte, The Architect) and The Architect Reborn as a variant | 6 |
+| Skill tablets (two per DLC world and two in the Architect level) | 10 |
+| Weapon mods for the Hyper Gloves and Ember Buster (the always-unlocked Ember Buster 1-1 is not a check) | 19 |
+| Relic orbs (numbered Relic Orb 54 to 63, after the base orbs) | 10 |
+| Room milestones in the four altered worlds (rooms 1, 3, 5 and 7) and the Architect level (rooms 1 and 3) | 18 |
+
+and these items: the ten DLC skills, the Hyper Gloves and the Ember Buster, and the ten DLC orb relics. The goal stays Praxis or Arch Praxis; the Architect is a check, not a goal. With `boss_variants` off, The Architect Reborn is left out.
+
+**How the logic works:** the DLC worlds are an alternate path you choose when starting a run, so they form their own chain (Mystic Forest, Inferno Bastille, Feudal Village, Utopic Labs, then the Architect level). The first DLC world opens once Steadfast Citadel is cleared, because the game unlocks the DLC after Evee and Praxis in that world, and each later DLC world needs the previous one cleared. The base worlds keep their own chain. DLC weapon mods need the matching DLC weapon.
+
+**What was checked and what was not.** The DLC data (worlds, enemies, skills, weapons, mods and relics) was read from a running copy of the game that owns the DLC, so the ids and counts come from the game. Unit tests and real seed generation cover the world, and the client mod was started once with the new build. Not verified: playing through any DLC world with a DLC seed. In particular these are untested guesses:
+
+- the order of the DLC worlds (taken from the game's area numbers and an achievement guide),
+- which Architect fight drops which of the two Architect skill tablets (the two tablets are named after their skills),
+- the room milestone depths (copied from the base worlds' pattern),
+- that DLC orbs carry their own relic ids (211 to 220) when picked up, which the mod relies on to tell them from base orbs.
+
+A seed without `dlc` never touches the Hyper Gloves, the Ember Buster, DLC skills or DLC relics in your save.
+
 ## HUD log window
 
 Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD instead of the plain box. It fades in when a message arrives and fades out a few seconds later. It is **experimental and off by default**.
@@ -144,7 +173,8 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 - **Starting skills:** gated standard skills in the Nexus shop and the in-run skill selector are untested.
 - **Boss Ambush Trap:** the miniboss it spawns can stay on screen after you kill it. Leaving the room should clear it.
 - Co-op and online multiplayer are not tested.
-- Boss Rush, Daily Dungeon and DLC encounters are not covered.
+- Boss Rush and Daily Dungeon are not covered.
+- **DLC support has not been played through.** See [DLC support](#dlc-support) for exactly what was and was not checked.
 - Seeds from an older APWorld do not have the newer options. Generate a new seed after updating.
 
 ## Troubleshooting

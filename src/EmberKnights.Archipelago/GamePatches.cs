@@ -20,7 +20,8 @@ internal static class SkillTabletPickupPatch
         {
             var service = ArchipelagoPlugin.Instance.Service;
             if (!__result || !service.IsActive || DropCMP is null ||
-                GameCatalog.Data.SkillForAbility(DropCMP.SkillTabletDefId) is null)
+                (GameCatalog.Data.SkillForAbility(DropCMP.SkillTabletDefId) is null &&
+                 !(service.DlcActive && GameCatalog.Data.DlcSkillForAbility(DropCMP.SkillTabletDefId) is not null)))
                 return;
             if (DropENT is not null && !ConsumedDrops.Add(DropENT.Pointer))
                 return;
@@ -47,12 +48,19 @@ internal static class RelicOrbPickupPatch
             // Only the 53 base-game orbs are randomized; DLC orbs and anything else keep vanilla behavior.
             // The check is sent the moment the orb is picked up. The orb itself still goes into the save's pending
             // list (nothing suppresses that), so Esper can identify it later.
-            if (!__result || !service.IsActive || DropCMP is null ||
-                !GameCatalog.Data.IsOrbRelic(DropCMP.UnknownRelicDefId))
+            if (!__result || !service.IsActive || DropCMP is null)
+                return;
+            var relicDefId = DropCMP.UnknownRelicDefId;
+            var isBaseOrb = GameCatalog.Data.IsOrbRelic(relicDefId);
+            var isDlcOrb = service.DlcActive && GameCatalog.Data.IsDlcOrbRelic(relicDefId);
+            if (!isBaseOrb && !isDlcOrb)
                 return;
             if (DropENT is not null && !ConsumedDrops.Add(DropENT.Pointer))
                 return;
-            service.CollectRelicOrb();
+            if (isBaseOrb)
+                service.CollectRelicOrb();
+            else
+                service.CollectDlcRelicOrb();
         }
         catch (Exception exception)
         {
@@ -450,8 +458,9 @@ internal static class WeaponDefUnlockConditionPatch
     {
         try
         {
+            // Managed weapons are the base ones, plus the DLC ones only when the seed uses the DLC.
             if (ArchipelagoPlugin.Instance.Service.IsActive && __0 is not null &&
-                GameCatalog.Data.IsRandomizedWeapon(__0.id))
+                ArchipelagoPlugin.Instance.Service.IsManagedWeapon(__0.id))
             {
                 __result = false;
             }

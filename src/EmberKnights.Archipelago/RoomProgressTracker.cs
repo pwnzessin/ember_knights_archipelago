@@ -24,7 +24,13 @@ public sealed class RoomProgressTracker
     /// Registers a room entry and returns the depth reached in <paramref name="areaName"/>,
     /// or 0 when the area is not one of the five base worlds.
     /// </summary>
-    public int Enter(int areaName, int roomInstanceId, int roomType)
+    public int Enter(int areaName, int roomInstanceId, int roomType) => Enter(areaName, roomInstanceId, roomType, dlcActive: false);
+
+    /// <summary>
+    /// Same as <see cref="Enter(int,int,int)"/>, and when <paramref name="dlcActive"/> is true the four DLC worlds and
+    /// the Architect level count as worlds too. With it false the behavior is exactly what it always was.
+    /// </summary>
+    public int Enter(int areaName, int roomInstanceId, int roomType, bool dlcActive)
     {
         if (areaName != currentArea)
         {
@@ -33,7 +39,7 @@ public sealed class RoomProgressTracker
             currentArea = areaName;
         }
 
-        if (areaName < FirstWorld || areaName > LastWorld)
+        if (!DlcPolicy.IsTrackedWorld(areaName, dlcActive))
             return 0;
 
         // Exit portals and unset room types are transitions, not rooms the player explores. Every other

@@ -31,10 +31,12 @@ class EmberKnightsWorld(World):
     item_name_to_id = CATALOG.item_name_to_id
     location_name_to_id = CATALOG.location_name_to_id
     item_name_groups = {
-        "Skills": {skill.name for skill in CATALOG.skills} | {skill.name for skill in CATALOG.standard_skills},
+        "Skills": {skill.name for skill in CATALOG.skills}
+        | {skill.name for skill in CATALOG.standard_skills}
+        | {skill.name for skill in CATALOG.dlc_skills},
         "Standard Skills": {skill.name for skill in CATALOG.standard_skills},
-        "Weapons": {weapon.name for weapon in CATALOG.weapons},
-        "Relics": {orb.name for orb in CATALOG.relic_orbs},
+        "Weapons": {weapon.name for weapon in CATALOG.weapons} | {weapon.name for weapon in CATALOG.dlc_weapons},
+        "Relics": {orb.name for orb in CATALOG.relic_orbs} | {orb.name for orb in CATALOG.dlc_relic_orbs},
         "Heat": {CATALOG.heat_reduction_item_name},
         "Archipelago Coins": {bundle.name for bundle in CATALOG.coin_bundles},
         "Traps": {trap.name for trap in CATALOG.trap_items},
@@ -42,9 +44,19 @@ class EmberKnightsWorld(World):
     }
     location_name_groups = {
         "Ember Tree": {node.location_name for node in CATALOG.ember_tree},
-        "Weapon Mods": {mod.location_name for mod in CATALOG.weapon_mods},
-        "Room Milestones": {milestone.location_name for milestone in CATALOG.room_milestones},
-        "Relic Orbs": {orb.location_name for orb in CATALOG.relic_orbs},
+        "Weapon Mods": {mod.location_name for mod in CATALOG.weapon_mods}
+        | {mod.location_name for mod in CATALOG.dlc_weapon_mods},
+        "Room Milestones": {milestone.location_name for milestone in CATALOG.room_milestones}
+        | {milestone.location_name for milestone in CATALOG.dlc_room_milestones},
+        "Relic Orbs": {orb.location_name for orb in CATALOG.relic_orbs}
+        | {orb.location_name for orb in CATALOG.dlc_relic_orbs},
+        "DLC": (
+            {skill.location_name for skill in CATALOG.dlc_skills}
+            | {encounter.location_name for encounter in [*CATALOG.dlc_minibosses, *CATALOG.dlc_bosses]}
+            | {mod.location_name for mod in CATALOG.dlc_weapon_mods}
+            | {milestone.location_name for milestone in CATALOG.dlc_room_milestones}
+            | {orb.location_name for orb in CATALOG.dlc_relic_orbs}
+        ),
     }
 
     _region_order = [
@@ -59,9 +71,11 @@ class EmberKnightsWorld(World):
     def __init__(self, multiworld: Any, player: int) -> None:
         super().__init__(multiworld, player)
         self.starting_weapon_ids: list[int] = [1]
+        self.dlc_enabled = False
         self.starting_standard_skill_ids: list[int] = []
 
     def generate_early(self) -> None:
+        self.dlc_enabled = bool(self.options.dlc)
         extra_count = max(0, min(len(CATALOG.weapons), int(self.options.extra_starting_weapons)))
         chosen = self.random.sample(CATALOG.weapons, extra_count)
         self.starting_weapon_ids = [1, *sorted(weapon.weapon_id for weapon in chosen)]
@@ -109,7 +123,12 @@ class EmberKnightsWorld(World):
         # The Ember Tree and weapon-mod menus are available from the very start of the game.
         nexus = Region("Nexus", self.player, self.multiworld)
         regions = {name: Region(name, self.player, self.multiworld) for name in self._region_order}
-        self.multiworld.regions += [menu, nexus, *regions.values()]
+        dlc_regions = (
+            {name: Region(name, self.player, self.multiworld) for name in CATALOG.dlc_regions}
+            if self.dlc_enabled
+            else {}
+        )
+        self.multiworld.regions += [menu, nexus, *regions.values(), *dlc_regions.values()]
         menu.connect(nexus, "Menu to Nexus")
 
         for node in CATALOG.ember_tree:
@@ -131,6 +150,17 @@ class EmberKnightsWorld(World):
             if weapon is not None:
                 location = self.multiworld.get_location(mod.location_name, self.player)
                 location.access_rule = lambda state, weapon_name=weapon.name: state.has(weapon_name, self.player)
+
+        if self.dlc_enabled:
+            for mod in CATALOG.dlc_weapon_mods:
+                nexus.add_locations(
+                    {mod.location_name: self.location_name_to_id[mod.location_name]},
+                    EmberKnightsLocation,
+                )
+                weapon = CATALOG.dlc_weapons_by_id.get(mod.weapon_type)
+                if weapon is not None:
+                    location = self.multiworld.get_location(mod.location_name, self.player)
+                    location.access_rule = lambda state, weapon_name=weapon.name: state.has(weapon_name, self.player)
 
         for milestone in CATALOG.room_milestones:
             regions[milestone.world].add_locations(
@@ -181,6 +211,9 @@ class EmberKnightsWorld(World):
             previous_region = region
             previous_clear_item = clear_item
 
+        if self.dlc_enabled:
+            self._create_dlc_regions(menu, regions, dlc_regions)
+
         if self.options.goal == Goal.option_praxis:
             regions["Netherra"].add_event(
                 "Praxis Victory", "Victory", location_type=EmberKnightsLocation, item_type=EmberKnightsItem
@@ -189,6 +222,51 @@ class EmberKnightsWorld(World):
             regions["Architect's Realm"].add_event(
                 "Arch Praxis Victory", "Victory", location_type=EmberKnightsLocation, item_type=EmberKnightsItem
             )
+
+    def _create_dlc_regions(self, menu: Region, regions: dict[str, Region], dlc_regions: dict[str, Region]) -> None:
+        # Orbs drop from enemy kill counters in any world. The DLC orbs live in the first DLC world, which opens as
+        # soon as the DLC does, just like the base orbs live in the first base world.
+        first = dlc_regions[CATALOG.dlc_regions[0]]
+        first.add_locations(
+            {orb.location_name: self.location_name_to_id[orb.location_name] for orb in CATALOG.dlc_relic_orbs},
+            EmberKnightsLocation,
+        )
+        for milestone in CATALOG.dlc_room_milestones:
+            dlc_regions[milestone.world].add_locations(
+                {milestone.location_name: self.location_name_to_id[milestone.location_name]}, EmberKnightsLocation
+            )
+        for skill in CATALOG.dlc_skills:
+            dlc_regions[skill.region].add_locations(
+                {skill.location_name: self.location_name_to_id[skill.location_name]}, EmberKnightsLocation
+            )
+        for encounter in [*CATALOG.dlc_minibosses, *CATALOG.dlc_bosses]:
+            if encounter.variant and not self.options.boss_variants:
+                continue
+            dlc_regions[encounter.region].add_locations(
+                {encounter.location_name: self.location_name_to_id[encounter.location_name]},
+                EmberKnightsLocation,
+            )
+
+        # The game unlocks the DLC after meeting Evee and seeing Praxis in the second base world, so the DLC chain opens
+        # once Steadfast Citadel is cleared. After that each DLC world opens when the previous one is cleared.
+        previous_region = regions["Steadfast Citadel"]
+        previous_clear_item = "Steadfast Citadel Clear"
+        for region_name in CATALOG.dlc_regions:
+            region = dlc_regions[region_name]
+            previous_region.connect(
+                region,
+                f"{previous_region.name} to {region_name}",
+                lambda state, required=previous_clear_item: state.has(required, self.player),
+            )
+            clear_item = f"{region_name} Clear"
+            region.add_event(
+                f"{region_name} Cleared",
+                clear_item,
+                location_type=EmberKnightsLocation,
+                item_type=EmberKnightsItem,
+            )
+            previous_region = region
+            previous_clear_item = clear_item
 
     def set_rules(self) -> None:
         self.set_completion_rule(Has("Victory"))
@@ -202,6 +280,10 @@ class EmberKnightsWorld(World):
             weapon.name for weapon in CATALOG.weapons if weapon.weapon_id not in self.starting_weapon_ids
         )
         permanent_items.extend(orb.name for orb in CATALOG.relic_orbs)
+        if self.dlc_enabled:
+            permanent_items.extend(skill.name for skill in CATALOG.dlc_skills)
+            permanent_items.extend(weapon.name for weapon in CATALOG.dlc_weapons)
+            permanent_items.extend(orb.name for orb in CATALOG.dlc_relic_orbs)
         permanent_items.extend(CATALOG.heat_reduction_item_name for _ in range(self.heat_reduction_item_count()))
         permanent_items.extend(self.coin_bundle_names())
         self.multiworld.itempool += [self.create_item(name) for name in permanent_items]
@@ -253,6 +335,9 @@ class EmberKnightsWorld(World):
             "traps",
         )
         slot_data["starting_weapon_ids"] = list(self.starting_weapon_ids)
+        # Presence of "dlc" tells the client this seed includes the DLC checks and items. Seeds from before this key
+        # existed lack it, and the client then treats the DLC as off, exactly as it always did.
+        slot_data["dlc"] = bool(self.dlc_enabled)
         # Presence of this key tells the client the standard skills are gated by this seed. Seeds generated before
         # the option existed lack it, and the client then keeps every standard skill unlocked as in the base game.
         slot_data["starting_standard_skill_ids"] = list(self.starting_standard_skill_ids)

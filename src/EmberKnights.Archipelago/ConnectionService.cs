@@ -54,6 +54,13 @@ public sealed class ConnectionService
     private string lastMessage = "Not set up yet: run Install.bat, or set slot_name in BepInEx/config/com.emberknights.archipelago.cfg";
 
     public bool IsActive { get; private set; }
+
+    /// <summary>
+    /// True when the connected seed was generated with the Wrath of the Architect DLC option on. Every DLC behavior in
+    /// this class is behind this flag, and it is false for any seed from before the option existed, so those seeds run
+    /// exactly the code they always did.
+    /// </summary>
+    public bool DlcActive { get; private set; }
     public bool IsConnected => loggedIn && session is not null;
     public string StatusText { get; private set; } = "Disconnected";
     public IReadOnlyList<string> RecentMessages => recentMessages;
@@ -160,6 +167,7 @@ public sealed class ConnectionService
         startingWeapons.Clear();
         startingWeapons.Add(1);
         startingStandardSkills = null;
+        DlcActive = false;
         ownedWeapons.Clear();
         ownedWeapons.Add(1);
         ownedRelics.Clear();
@@ -226,6 +234,9 @@ public sealed class ConnectionService
             return vanillaResult;
         if (GameCatalog.Data.SkillForAbility(abilityId) is not null)
             return OwnsAbility(abilityId);
+        // A DLC skill is controlled by the multiworld only when the seed uses the DLC. Otherwise the game decides.
+        if (DlcActive && GameCatalog.Data.DlcSkillForAbility(abilityId) is not null)
+            return OwnsAbility(abilityId);
         // A standard skill is free only when the seed does not gate them. Otherwise it has to be a starting skill
         // or one the multiworld has delivered.
         if (GameCatalog.Data.StandardSkillForAbility(abilityId) is not null)
@@ -235,6 +246,7 @@ public sealed class ConnectionService
 
     public bool ShouldSuppressAbilityGrant(int abilityId) =>
         IsActive && (GameCatalog.Data.SkillForAbility(abilityId) is not null ||
+                     (DlcActive && GameCatalog.Data.DlcSkillForAbility(abilityId) is not null) ||
                      (startingStandardSkills is not null && GameCatalog.Data.StandardSkillForAbility(abilityId) is not null));
 
     public bool OwnsWeapon(int weaponId) => weaponId == 1 || ownedWeapons.Contains(weaponId);
@@ -245,20 +257,32 @@ public sealed class ConnectionService
             return vanillaResult;
         if (weaponId == 1)
             return true;
-        if (!GameCatalog.Data.IsRandomizedWeapon(weaponId))
+        if (!IsManagedWeapon(weaponId))
             return vanillaResult;
         return OwnsWeapon(weaponId);
     }
 
     public bool ShouldSuppressWeaponGrant(int weaponId) =>
-        IsActive && !GameActions.ApplyingWeapons && GameCatalog.Data.IsRandomizedWeapon(weaponId);
+        IsActive && !GameActions.ApplyingWeapons && IsManagedWeapon(weaponId);
+
+    /// <summary>
+    /// A base weapon is managed whenever the plugin is active. A DLC weapon (Hyper Gloves, Ember Buster) is managed only
+    /// when the seed uses the DLC, so a seed without it never adds those weapons to or removes them from the save.
+    /// </summary>
+    public bool IsManagedWeapon(int weaponId) => DlcPolicy.IsManagedWeapon(
+        GameCatalog.Data.IsRandomizedWeapon(weaponId), GameCatalog.Data.IsDlcWeapon(weaponId), DlcActive);
+
+    /// <summary>The weapons the plugin must reconcile with the save: the base ones, plus the DLC ones with the DLC on.</summary>
+    public IEnumerable<int> ManagedWeaponIds() =>
+        GameCatalog.Data.Weapons.Select(weapon => weapon.WeaponId)
+            .Concat(DlcActive ? GameCatalog.Data.Dlc.Weapons.Select(weapon => weapon.WeaponId) : Enumerable.Empty<int>());
 
     public bool OwnsRelic(int relicDefId) => ownedRelics.Contains(relicDefId);
 
     /// <summary>Only the 53 base orb relics are controlled by the multiworld; all other relics stay vanilla.</summary>
     public bool ResolveRelicUnlocked(int relicDefId, bool vanillaResult)
     {
-        if (!IsActive || !GameCatalog.Data.IsOrbRelic(relicDefId))
+        if (!IsActive || !IsManagedRelic(relicDefId))
             return vanillaResult;
         return OwnsRelic(relicDefId);
     }
@@ -268,7 +292,11 @@ public sealed class ConnectionService
     /// item is the only source of those relics.
     /// </summary>
     public bool ShouldSuppressRelicGrant(int relicDefId) =>
-        IsActive && GameCatalog.Data.IsOrbRelic(relicDefId);
+        IsActive && IsManagedRelic(relicDefId);
+
+    /// <summary>A base orb relic is managed whenever the plugin is active; a DLC orb relic only with the DLC on.</summary>
+    public bool IsManagedRelic(int relicDefId) => DlcPolicy.IsManagedRelic(
+        GameCatalog.Data.IsOrbRelic(relicDefId), GameCatalog.Data.IsDlcOrbRelic(relicDefId), DlcActive);
 
     /// <summary>
     /// Picks what Esper's reveal shows for the orbs being handed in (see <see cref="RelicOrbPolicy.ChooseReveals"/>)
@@ -307,6 +335,29 @@ public sealed class ConnectionService
         state.OrbsCollected = order;
         SaveState();
         ArchipelagoPlugin.LogSource.LogInfo($"Relic orb #{order} collected.");
+        CheckLocation(locationId);
+    }
+
+    /// <summary>
+    /// Records that the player picked up a DLC relic orb and reports the matching "Relic Orb 54 to 63" check straight
+    /// away. DLC orbs are counted on their own, because the game hands out DLC orb relics from a separate list.
+    /// Does nothing unless the seed uses the DLC.
+    /// </summary>
+    public void CollectDlcRelicOrb()
+    {
+        if (!IsActive || !DlcActive || state is null)
+            return;
+
+        var order = state.DlcOrbsCollected + 1;
+        if (GameCatalog.Data.LocationForDlcRelicOrb(order) is not { } locationId)
+        {
+            ArchipelagoPlugin.LogSource.LogInfo($"DLC relic orb #{order} is beyond the {GameCatalog.Data.Dlc.RelicOrbs.Count} randomized DLC orbs; ignored.");
+            return;
+        }
+
+        state.DlcOrbsCollected = order;
+        SaveState();
+        ArchipelagoPlugin.LogSource.LogInfo($"DLC relic orb #{order} collected.");
         CheckLocation(locationId);
     }
 
@@ -416,6 +467,11 @@ public sealed class ConnectionService
     }
     public void CheckSkillTablet(int abilityId)
     {
+        if (DlcActive && GameCatalog.Data.DlcSkillForAbility(abilityId) is { } dlcSkill)
+        {
+            CheckLocation(GameCatalog.Data.LocationForDlcSkill(dlcSkill));
+            return;
+        }
         var skill = GameCatalog.Data.SkillForAbility(abilityId);
         if (skill is null)
         {
@@ -430,6 +486,8 @@ public sealed class ConnectionService
         var encounter = GameCatalog.Data.MinibossForEnemy(enemyId);
         if (encounter is not null)
             CheckLocation(GameCatalog.Data.LocationForMiniboss(encounter));
+        if (DlcActive && GameCatalog.Data.DlcMinibossForEnemy(enemyId) is { } dlcEncounter)
+            CheckLocation(GameCatalog.Data.LocationForDlcMiniboss(dlcEncounter));
     }
 
     public void CheckBoss(int enemyId)
@@ -437,6 +495,8 @@ public sealed class ConnectionService
         var encounter = GameCatalog.Data.BossForEnemy(enemyId);
         if (encounter is not null)
             CheckLocation(GameCatalog.Data.LocationForBoss(encounter));
+        if (DlcActive && GameCatalog.Data.DlcBossForEnemy(enemyId) is { } dlcEncounter)
+            CheckLocation(GameCatalog.Data.LocationForDlcBoss(dlcEncounter));
     }
 
     public void ReportFinalBoss(string goal)
@@ -465,6 +525,12 @@ public sealed class ConnectionService
             CheckLocation(locationId);
     }
 
+    public void CheckDlcWeaponMod(int defId)
+    {
+        if (DlcActive && GameCatalog.Data.LocationForDlcWeaponMod(defId) is { } locationId)
+            CheckLocation(locationId);
+    }
+
     /// <summary>
     /// Records entering a room and reports every world-progress milestone reached so far in this run.
     /// </summary>
@@ -473,7 +539,7 @@ public sealed class ConnectionService
         if (!IsActive)
             return;
 
-        if (areaName >= RoomProgressTracker.FirstWorld && areaName <= RoomProgressTracker.LastWorld)
+        if (DlcPolicy.IsRunWorld(areaName, DlcActive))
         {
             wasInRunWorld = true;
         }
@@ -490,7 +556,7 @@ public sealed class ConnectionService
             }
         }
 
-        var depth = roomProgress.Enter(areaName, roomInstanceId, roomType);
+        var depth = roomProgress.Enter(areaName, roomInstanceId, roomType, DlcActive);
         EnforceHeat();
         EnforceArchipelagoCoins();
         EnforceWeapons();
@@ -498,6 +564,11 @@ public sealed class ConnectionService
             $"Room entered: area {areaName}, room instance {roomInstanceId}, type {roomType} -> depth {depth}.");
         foreach (var milestone in GameCatalog.Data.MilestonesFor(areaName, depth))
             CheckLocation(GameCatalog.Data.LocationForRoomMilestone(milestone));
+        if (DlcActive)
+        {
+            foreach (var milestone in GameCatalog.Data.DlcMilestonesFor(areaName, depth))
+                CheckLocation(GameCatalog.Data.LocationForDlcRoomMilestone(milestone));
+        }
     }
 
     /// <summary>
@@ -529,7 +600,7 @@ public sealed class ConnectionService
     {
         if (!IsActive)
             return;
-        GameActions.ApplyWeapons(ownedWeapons);
+        GameActions.ApplyWeapons(ownedWeapons, includeDlcWeapons: DlcActive);
     }
 
     /// <summary>
@@ -576,6 +647,17 @@ public sealed class ConnectionService
                     unlockedMods.Add(mod.DefId);
             }
 
+            var unlockedDlcMods = new List<int>();
+            if (DlcActive)
+            {
+                foreach (var mod in GameCatalog.Data.Dlc.WeaponMods)
+                {
+                    var data = saveSlot.GetWeaponMod(mod.DefId, 0);
+                    if (data is not null && data.Unlocked)
+                        unlockedDlcMods.Add(mod.DefId);
+                }
+            }
+
             // The first scan of a brand-new seed records what is already unlocked, such as the five Ember Tree nodes
             // the game gives a fresh save, so those never become checks. It runs once per seed.
             if (state is not null && !state.BaselineTaken && !state.BaselineSkipped)
@@ -589,6 +671,19 @@ public sealed class ConnectionService
                     "weapon mod(s) were already unlocked and are not checks.");
             }
 
+            // A DLC weapon mod the player already owns when a DLC seed first connects is not a check, just like the
+            // base mods. The baseline for them is recorded the first time a seed is seen with the DLC on, even if the
+            // base baseline was taken earlier, so turning the DLC on for a seed never reports old mods.
+            if (state is not null && DlcActive && !state.BaselineSkipped && state.BaselineDlcWeaponMods.Count == 0 &&
+                !state.DlcBaselineTaken)
+            {
+                state.BaselineDlcWeaponMods = UnlockBaseline.TakeBaseline(unlockedDlcMods).OrderBy(id => id).ToList();
+                state.DlcBaselineTaken = true;
+                SaveState();
+                ArchipelagoPlugin.LogSource.LogInfo(
+                    $"New DLC seed: {state.BaselineDlcWeaponMods.Count} DLC weapon mod(s) were already unlocked and are not checks.");
+            }
+
             var baselineNodes = new HashSet<int>(state?.BaselineEmberTree ?? new List<int>());
             var baselineMods = new HashSet<int>(state?.BaselineWeaponMods ?? new List<int>());
             foreach (var id in unlockedNodes)
@@ -600,6 +695,12 @@ public sealed class ConnectionService
             {
                 if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineMods))
                     CheckWeaponMod(id);
+            }
+            var baselineDlcMods = new HashSet<int>(state?.BaselineDlcWeaponMods ?? new List<int>());
+            foreach (var id in unlockedDlcMods)
+            {
+                if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineDlcMods))
+                    CheckDlcWeaponMod(id);
             }
         }
         catch (Exception exception)
@@ -735,6 +836,8 @@ public sealed class ConnectionService
                 startingWeapons.Add(weaponId);
             ownedWeapons.Clear();
             ownedWeapons.UnionWith(startingWeapons);
+            success.SlotData.TryGetValue("dlc", out var dlcRaw);
+            DlcActive = DlcPolicy.ReadDlcActive(dlcRaw);
             success.SlotData.TryGetValue("starting_standard_skill_ids", out var startingSkillsRaw);
             startingStandardSkills = StandardSkillPolicy.ReadStartingSkills(
                 startingSkillsRaw, id => GameCatalog.Data.StandardSkillForAbility(id) is not null);
@@ -823,6 +926,17 @@ public sealed class ConnectionService
                     ownedWeapons.Add(weapon.WeaponId);
                 if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic && ownedRelics.Add(relic.DefId))
                     receivedRelicOrder.Add(relic.DefId);
+                // DLC items are only ever sent by a seed that has the DLC on, but they are recorded only then, so a stray
+                // DLC item in a DLC-off seed can never unlock anything.
+                if (DlcActive)
+                {
+                    if (GameCatalog.Data.DlcSkillForItem(item.ItemId) is { } dlcSkill)
+                        ownedAbilities.Add(dlcSkill.AbilityId);
+                    if (GameCatalog.Data.DlcWeaponForItem(item.ItemId) is { } dlcWeapon)
+                        ownedWeapons.Add(dlcWeapon.WeaponId);
+                    if (GameCatalog.Data.DlcRelicForItem(item.ItemId) is { } dlcRelic && ownedRelics.Add(dlcRelic.DefId))
+                        receivedRelicOrder.Add(dlcRelic.DefId);
+                }
                 if (GameCatalog.Data.IsHeatReductionItem(item.ItemId))
                     heatReductions++;
                 if (GameCatalog.Data.FillerForItem(item.ItemId) is { Kind: "coin" } coinBundle)
@@ -879,6 +993,25 @@ public sealed class ConnectionService
         if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic)
         {
             LastMessage = $"Received relic: {relic.Name}";
+            ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
+            return true;
+        }
+        if (GameCatalog.Data.DlcSkillForItem(item.ItemId) is { } dlcSkill)
+        {
+            LastMessage = $"Received skill: {dlcSkill.Name}";
+            ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
+            return true;
+        }
+        if (GameCatalog.Data.DlcWeaponForItem(item.ItemId) is { } dlcWeapon)
+        {
+            EnforceWeapons();
+            LastMessage = $"Received weapon: {dlcWeapon.Name}";
+            ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
+            return true;
+        }
+        if (GameCatalog.Data.DlcRelicForItem(item.ItemId) is { } dlcRelic)
+        {
+            LastMessage = $"Received relic: {dlcRelic.Name}";
             ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
             return true;
         }
@@ -1163,6 +1296,7 @@ public sealed class ConnectionService
                 try
                 {
                     var id = Convert.ToInt32(element);
+                    // A starting weapon is always a base weapon: the world never starts a seed with a DLC weapon.
                     if (id == 1 || GameCatalog.Data.IsRandomizedWeapon(id))
                         result.Add(id);
                 }

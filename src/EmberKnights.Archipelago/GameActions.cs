@@ -19,7 +19,13 @@ public static class GameActions
     public static bool ApplyingHeat { get; private set; }
     public static bool ApplyingWeapons { get; private set; }
 
-    public static bool ApplyWeapons(IReadOnlySet<int> ownedWeapons)
+    public static bool ApplyWeapons(IReadOnlySet<int> ownedWeapons) => ApplyWeapons(ownedWeapons, includeDlcWeapons: false);
+
+    /// <summary>
+    /// Brings the save in line with the weapons the multiworld owns. With <paramref name="includeDlcWeapons"/> the DLC
+    /// weapons are reconciled too; without it they are left exactly as the save has them.
+    /// </summary>
+    public static bool ApplyWeapons(IReadOnlySet<int> ownedWeapons, bool includeDlcWeapons)
     {
         try
         {
@@ -41,7 +47,12 @@ public static class GameActions
                     changed = true;
                 }
 
-                foreach (var weapon in GameCatalog.Data.Weapons)
+                // The DLC weapons are reconciled only for a seed that uses the DLC. A seed without it must never add the
+                // Hyper Gloves or the Ember Buster to the save, or take them away from a player who owns them.
+                var managed = includeDlcWeapons
+                    ? GameCatalog.Data.Weapons.Concat(GameCatalog.Data.Dlc.Weapons)
+                    : GameCatalog.Data.Weapons;
+                foreach (var weapon in managed)
                 {
                     var unlockedInSave = saveSlot.weaponUnlocks.Contains(weapon.WeaponId);
                     var shouldBeUnlocked = ownedWeapons.Contains(weapon.WeaponId);

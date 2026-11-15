@@ -88,9 +88,12 @@ class RelicOrb:
     def_id: int
     name: str
 
+    # DLC orbs are numbered after the base orbs, so "Relic Orb 54" is the first DLC orb. The base orbs keep order 1..53.
+    number_offset: int = 0
+
     @property
     def location_name(self) -> str:
-        return f"Relic Orb {self.order:02d}"
+        return f"Relic Orb {self.order + self.number_offset:02d}"
 
 
 @dataclass(frozen=True)
@@ -143,6 +146,32 @@ class Catalog:
             RoomMilestone(entry["world"], entry["areaName"], entry["room"]) for entry in raw["roomMilestones"]
         ]
         self.relic_orbs = [RelicOrb(entry["order"], entry["defId"], entry["name"]) for entry in raw["relicOrbs"]]
+        dlc = raw["dlc"]
+        self.dlc_regions: list[str] = list(dlc["regions"])
+        self.dlc_skills = [
+            Skill(entry["name"], entry["abilityId"], entry["locationName"], entry["region"]) for entry in dlc["skills"]
+        ]
+        self.dlc_weapons = [Weapon(entry["name"], entry["weaponId"]) for entry in dlc["weapons"]]
+        self.dlc_weapons_by_id = {weapon.weapon_id: weapon for weapon in self.dlc_weapons}
+        self.dlc_minibosses = [
+            Encounter(entry["name"], tuple(entry["enemyIds"]), entry["region"], entry["variant"])
+            for entry in dlc["minibosses"]
+        ]
+        self.dlc_bosses = [
+            Encounter(entry["name"], tuple(entry["enemyIds"]), entry["region"], entry["variant"])
+            for entry in dlc["bosses"]
+        ]
+        self.dlc_weapon_mods = [
+            WeaponMod(entry["name"], entry["defId"], entry["weaponType"]) for entry in dlc["weaponMods"]
+        ]
+        self.dlc_room_milestones = [
+            RoomMilestone(entry["world"], entry["areaName"], entry["room"]) for entry in dlc["roomMilestones"]
+        ]
+        # The DLC orbs continue the base numbering: the first DLC orb is "Relic Orb 54".
+        self.dlc_relic_orbs = [
+            RelicOrb(entry["order"], entry["defId"], entry["name"], number_offset=len(self.relic_orbs))
+            for entry in dlc["relicOrbs"]
+        ]
         heat = raw["heat"]
         self.max_heat: int = heat["maxHeat"]
         self.heat_modifiers = [
@@ -176,6 +205,22 @@ class Catalog:
             self.item_name_to_id[orb.name] = self.relic_item_id(index)
             self.location_name_to_id[orb.location_name] = self.relic_orb_location_id(index)
         self.item_name_to_id[self.heat_reduction_item_name] = self.heat_reduction_item_id()
+        for index, skill in enumerate(self.dlc_skills):
+            self.item_name_to_id[skill.name] = self.dlc_skill_item_id(index)
+            self.location_name_to_id[skill.location_name] = self.dlc_skill_location_id(index)
+        for index, weapon in enumerate(self.dlc_weapons):
+            self.item_name_to_id[weapon.name] = self.dlc_weapon_item_id(index)
+        for index, orb in enumerate(self.dlc_relic_orbs):
+            self.item_name_to_id[orb.name] = self.dlc_relic_item_id(index)
+            self.location_name_to_id[orb.location_name] = self.dlc_relic_orb_location_id(index)
+        for index, encounter in enumerate(self.dlc_minibosses):
+            self.location_name_to_id[encounter.location_name] = self.dlc_miniboss_location_id(index)
+        for index, encounter in enumerate(self.dlc_bosses):
+            self.location_name_to_id[encounter.location_name] = self.dlc_boss_location_id(index)
+        for index, mod in enumerate(self.dlc_weapon_mods):
+            self.location_name_to_id[mod.location_name] = self.dlc_weapon_mod_location_id(index)
+        for index, milestone in enumerate(self.dlc_room_milestones):
+            self.location_name_to_id[milestone.location_name] = self.dlc_room_milestone_location_id(index)
 
     def skill_item_id(self, index: int) -> int:
         return self.id_base + 1 + index
@@ -216,6 +261,34 @@ class Catalog:
 
     def heat_reduction_item_id(self) -> int:
         return self.id_base + 400
+
+    # ---- DLC (Wrath of the Architect). Items live at +500.., locations at +8000.., which no base range uses.
+    def dlc_skill_item_id(self, index: int) -> int:
+        return self.id_base + 500 + index
+
+    def dlc_weapon_item_id(self, index: int) -> int:
+        return self.id_base + 520 + index
+
+    def dlc_relic_item_id(self, index: int) -> int:
+        return self.id_base + 540 + index
+
+    def dlc_skill_location_id(self, index: int) -> int:
+        return self.id_base + 8000 + index
+
+    def dlc_miniboss_location_id(self, index: int) -> int:
+        return self.id_base + 8100 + index
+
+    def dlc_boss_location_id(self, index: int) -> int:
+        return self.id_base + 8200 + index
+
+    def dlc_weapon_mod_location_id(self, index: int) -> int:
+        return self.id_base + 8300 + index
+
+    def dlc_room_milestone_location_id(self, index: int) -> int:
+        return self.id_base + 8400 + index
+
+    def dlc_relic_orb_location_id(self, index: int) -> int:
+        return self.id_base + 8500 + index
 
 
 CATALOG = Catalog()

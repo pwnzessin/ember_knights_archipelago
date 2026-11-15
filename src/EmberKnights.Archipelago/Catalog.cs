@@ -53,7 +53,9 @@ public sealed class RelicOrbDefinition
     public int Order { get; set; }
     public int DefId { get; set; }
     public string Name { get; set; } = "";
-    public string LocationName => $"Relic Orb {Order:D2}";
+    /// <summary>The DLC orbs continue the base numbering, so the first DLC orb is shown as "Relic Orb 54".</summary>
+    public int NumberOffset { get; set; }
+    public string LocationName => $"Relic Orb {Order + NumberOffset:D2}";
 }
 
 public sealed class HeatModifierDefinition
@@ -87,6 +89,19 @@ public sealed class EncounterDefinition
     public string? FinalGoal { get; set; }
 }
 
+/// <summary>The Wrath of the Architect content, in its own lists so nothing about the base game changes when it is off.</summary>
+public sealed class DlcCatalogDefinition
+{
+    public List<string> Regions { get; set; } = new();
+    public List<SkillDefinition> Skills { get; set; } = new();
+    public List<WeaponDefinition> Weapons { get; set; } = new();
+    public List<EncounterDefinition> Minibosses { get; set; } = new();
+    public List<EncounterDefinition> Bosses { get; set; } = new();
+    public List<WeaponModDefinition> WeaponMods { get; set; } = new();
+    public List<RoomMilestoneDefinition> RoomMilestones { get; set; } = new();
+    public List<RelicOrbDefinition> RelicOrbs { get; set; } = new();
+}
+
 public sealed class CatalogData
 {
     public int IdBase { get; set; }
@@ -101,6 +116,7 @@ public sealed class CatalogData
     public List<RoomMilestoneDefinition> RoomMilestones { get; set; } = new();
     public List<RelicOrbDefinition> RelicOrbs { get; set; } = new();
     public HeatCatalogDefinition Heat { get; set; } = new();
+    public DlcCatalogDefinition Dlc { get; set; } = new();
 
     public const string HeatReductionItemName = "Heat Reduction";
 
@@ -109,6 +125,8 @@ public sealed class CatalogData
     private readonly Dictionary<int, int> emberTreeIndexByDefId = new();
     private readonly Dictionary<int, int> weaponModIndexByDefId = new();
     private readonly Dictionary<int, int> relicIndexByDefId = new();
+    private readonly Dictionary<int, int> dlcRelicIndexByDefId = new();
+    private readonly Dictionary<int, int> dlcWeaponModIndexByDefId = new();
 
     public long SkillItemId(int index) => IdBase + 1 + index;
     public long SkillLocationId(int index) => IdBase + 1000 + index;
@@ -123,6 +141,16 @@ public sealed class CatalogData
     public long RelicOrbLocationId(int index) => IdBase + 7000 + index;
     public long RelicItemId(int index) => IdBase + 300 + index;
     public long HeatReductionItemId => IdBase + 400;
+
+    public long DlcSkillItemId(int index) => IdBase + 500 + index;
+    public long DlcWeaponItemId(int index) => IdBase + 520 + index;
+    public long DlcRelicItemId(int index) => IdBase + 540 + index;
+    public long DlcSkillLocationId(int index) => IdBase + 8000 + index;
+    public long DlcMinibossLocationId(int index) => IdBase + 8100 + index;
+    public long DlcBossLocationId(int index) => IdBase + 8200 + index;
+    public long DlcWeaponModLocationId(int index) => IdBase + 8300 + index;
+    public long DlcRoomMilestoneLocationId(int index) => IdBase + 8400 + index;
+    public long DlcRelicOrbLocationId(int index) => IdBase + 8500 + index;
 
     public void Initialize()
     {
@@ -160,11 +188,93 @@ public sealed class CatalogData
             relicIndexByDefId[RelicOrbs[i].DefId] = i;
         }
         itemNames[HeatReductionItemId] = HeatReductionItemName;
+
+        // The names of every DLC entry are always known, whether or not a seed uses the DLC, so a received item or a
+        // hint for one is never shown as "Item 113523500".
+        for (var i = 0; i < Dlc.Skills.Count; i++)
+        {
+            itemNames[DlcSkillItemId(i)] = Dlc.Skills[i].Name;
+            locationNames[DlcSkillLocationId(i)] = Dlc.Skills[i].LocationName;
+        }
+        for (var i = 0; i < Dlc.Weapons.Count; i++)
+            itemNames[DlcWeaponItemId(i)] = Dlc.Weapons[i].Name;
+        for (var i = 0; i < Dlc.Minibosses.Count; i++)
+            locationNames[DlcMinibossLocationId(i)] = $"{Dlc.Minibosses[i].Name} Defeated";
+        for (var i = 0; i < Dlc.Bosses.Count; i++)
+            locationNames[DlcBossLocationId(i)] = $"{Dlc.Bosses[i].Name} Defeated";
+        for (var i = 0; i < Dlc.WeaponMods.Count; i++)
+        {
+            locationNames[DlcWeaponModLocationId(i)] = Dlc.WeaponMods[i].Name;
+            dlcWeaponModIndexByDefId[Dlc.WeaponMods[i].DefId] = i;
+        }
+        for (var i = 0; i < Dlc.RoomMilestones.Count; i++)
+            locationNames[DlcRoomMilestoneLocationId(i)] = Dlc.RoomMilestones[i].LocationName;
+        for (var i = 0; i < Dlc.RelicOrbs.Count; i++)
+        {
+            Dlc.RelicOrbs[i].NumberOffset = RelicOrbs.Count;
+            itemNames[DlcRelicItemId(i)] = Dlc.RelicOrbs[i].Name;
+            locationNames[DlcRelicOrbLocationId(i)] = Dlc.RelicOrbs[i].LocationName;
+            dlcRelicIndexByDefId[Dlc.RelicOrbs[i].DefId] = i;
+        }
     }
 
     public bool IsHeatReductionItem(long itemId) => itemId == HeatReductionItemId;
 
     public bool IsOrbRelic(int defId) => relicIndexByDefId.ContainsKey(defId);
+
+    /// <summary>True for one of the 10 DLC orb relics (ids 211 to 220). Base orbs never match.</summary>
+    public bool IsDlcOrbRelic(int defId) => dlcRelicIndexByDefId.ContainsKey(defId);
+
+    public RelicOrbDefinition? DlcRelicForItem(long itemId)
+    {
+        var index = itemId - IdBase - 540;
+        return index >= 0 && index < Dlc.RelicOrbs.Count ? Dlc.RelicOrbs[(int)index] : null;
+    }
+
+    /// <summary>The location for the n-th DLC orb (1-based), or null when n is outside 1..count.</summary>
+    public long? LocationForDlcRelicOrb(int order) =>
+        order >= 1 && order <= Dlc.RelicOrbs.Count ? DlcRelicOrbLocationId(order - 1) : null;
+
+    public long? LocationForDlcWeaponMod(int defId) =>
+        dlcWeaponModIndexByDefId.TryGetValue(defId, out var index) ? DlcWeaponModLocationId(index) : null;
+
+    public SkillDefinition? DlcSkillForAbility(int abilityId) => Dlc.Skills.FirstOrDefault(skill => skill.AbilityId == abilityId);
+
+    public SkillDefinition? DlcSkillForItem(long itemId)
+    {
+        var index = itemId - IdBase - 500;
+        return index >= 0 && index < Dlc.Skills.Count ? Dlc.Skills[(int)index] : null;
+    }
+
+    public WeaponDefinition? DlcWeaponForItem(long itemId)
+    {
+        var index = itemId - IdBase - 520;
+        return index >= 0 && index < Dlc.Weapons.Count ? Dlc.Weapons[(int)index] : null;
+    }
+
+    public bool IsDlcWeapon(int weaponId) => Dlc.Weapons.Any(weapon => weapon.WeaponId == weaponId);
+
+    public long LocationForDlcSkill(SkillDefinition skill) => DlcSkillLocationId(Dlc.Skills.IndexOf(skill));
+    public long LocationForDlcMiniboss(EncounterDefinition encounter) => DlcMinibossLocationId(Dlc.Minibosses.IndexOf(encounter));
+    public long LocationForDlcBoss(EncounterDefinition encounter) => DlcBossLocationId(Dlc.Bosses.IndexOf(encounter));
+
+    public EncounterDefinition? DlcMinibossForEnemy(int enemyId) =>
+        Dlc.Minibosses.FirstOrDefault(encounter => encounter.EnemyIds.Contains(enemyId));
+
+    public EncounterDefinition? DlcBossForEnemy(int enemyId) =>
+        Dlc.Bosses.FirstOrDefault(encounter => encounter.EnemyIds.Contains(enemyId));
+
+    public IEnumerable<RoomMilestoneDefinition> DlcMilestonesFor(int areaName, int roomsEntered)
+    {
+        foreach (var milestone in Dlc.RoomMilestones)
+        {
+            if (milestone.AreaName == areaName && milestone.Room <= roomsEntered)
+                yield return milestone;
+        }
+    }
+
+    public long LocationForDlcRoomMilestone(RoomMilestoneDefinition milestone) =>
+        DlcRoomMilestoneLocationId(Dlc.RoomMilestones.IndexOf(milestone));
 
     public RelicOrbDefinition? RelicForItem(long itemId)
     {
@@ -268,6 +378,10 @@ public static class GameCatalog
             catalog.RelicOrbs.Count != 53 || catalog.Heat.MaxHeat != 55 || catalog.Heat.Modifiers.Count != 17 ||
             catalog.Fillers.Count != 8)
             throw new InvalidOperationException("Archipelago catalog counts do not match the supported game version.");
+        if (catalog.Dlc.Skills.Count != 10 || catalog.Dlc.Weapons.Count != 2 || catalog.Dlc.Minibosses.Count != 4 ||
+            catalog.Dlc.Bosses.Count != 6 || catalog.Dlc.WeaponMods.Count != 19 ||
+            catalog.Dlc.RoomMilestones.Count != 18 || catalog.Dlc.RelicOrbs.Count != 10 || catalog.Dlc.Regions.Count != 5)
+            throw new InvalidOperationException("Archipelago DLC catalog counts do not match the supported game version.");
         return catalog;
     }
 }

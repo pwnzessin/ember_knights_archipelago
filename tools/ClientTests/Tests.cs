@@ -1674,3 +1674,367 @@ public class ConnectionSetupTests
         Assert.Equal("Player1", ConnectionSetup.PlaceholderSlot);
     }
 }
+
+public class DlcPolicyTests
+{
+    [Fact]
+    public void ASeedWithoutTheKeyOrWithFalseIsNotADlcSeed()
+    {
+        Assert.False(DlcPolicy.ReadDlcActive(null));
+        Assert.False(DlcPolicy.ReadDlcActive(false));
+        Assert.False(DlcPolicy.ReadDlcActive("false"));
+        Assert.False(DlcPolicy.ReadDlcActive(0L));
+        Assert.False(DlcPolicy.ReadDlcActive("nonsense"));
+        Assert.False(DlcPolicy.ReadDlcActive(new object()));
+    }
+
+    [Fact]
+    public void OnlyAnExplicitTrueMakesItADlcSeedWhateverTypeJsonGaveUs()
+    {
+        Assert.True(DlcPolicy.ReadDlcActive(true));
+        Assert.True(DlcPolicy.ReadDlcActive("true"));
+        Assert.True(DlcPolicy.ReadDlcActive("True"));
+        Assert.True(DlcPolicy.ReadDlcActive(1L));
+        Assert.True(DlcPolicy.ReadDlcActive(1));
+        Assert.True(DlcPolicy.ReadDlcActive("1"));
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, true, true, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, false)]
+    public void ADlcWeaponIsManagedOnlyWithTheDlcOnWhileABaseWeaponAlwaysIs(bool isBase, bool isDlc, bool dlcActive, bool expected)
+    {
+        // The Hyper Gloves and Ember Buster must never be added to or removed from a save by a seed without the DLC.
+        Assert.Equal(expected, DlcPolicy.IsManagedWeapon(isBase, isDlc, dlcActive));
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, true, true, true)]
+    [InlineData(false, false, true, false)]
+    public void ADlcSkillIsManagedOnlyWithTheDlcOn(bool isTablet, bool isDlc, bool dlcActive, bool expected)
+    {
+        Assert.Equal(expected, DlcPolicy.IsManagedAbility(isTablet, isDlc, dlcActive));
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, true, true, true)]
+    [InlineData(false, false, true, false)]
+    public void ADlcOrbRelicIsManagedOnlyWithTheDlcOn(bool isBaseOrb, bool isDlcOrb, bool dlcActive, bool expected)
+    {
+        Assert.Equal(expected, DlcPolicy.IsManagedRelic(isBaseOrb, isDlcOrb, dlcActive));
+    }
+
+    [Fact]
+    public void TheOrbCheckCountGrowsByTheDlcOrbsOnlyWithTheDlcOn()
+    {
+        Assert.Equal(53, DlcPolicy.OrbCheckCount(53, 10, dlcActive: false));
+        Assert.Equal(63, DlcPolicy.OrbCheckCount(53, 10, dlcActive: true));
+    }
+
+    [Theory]
+    [InlineData(1, false, true)]
+    [InlineData(5, false, true)]
+    [InlineData(6, false, false)]
+    [InlineData(8, false, false)]
+    [InlineData(11, false, false)]
+    [InlineData(14, false, false)]
+    [InlineData(8, true, true)]
+    [InlineData(9, true, true)]
+    [InlineData(10, true, true)]
+    [InlineData(11, true, true)]
+    [InlineData(14, true, true)]
+    [InlineData(6, true, false)]
+    [InlineData(7, true, false)]
+    [InlineData(12, true, false)]
+    [InlineData(13, true, false)]
+    [InlineData(0, true, false)]
+    [InlineData(15, true, false)]
+    public void OnlyTheRightWorldsCountTowardRoomMilestones(int area, bool dlcActive, bool expected)
+    {
+        // 6 is the Nexus, 7 the credits, 12 the PAX competition and 13 Boss Rush: none of them is a milestone world.
+        Assert.Equal(expected, DlcPolicy.IsTrackedWorld(area, dlcActive));
+    }
+}
+
+public class DlcRoomTrackerTests
+{
+    private const int Battle = 1;
+
+    [Fact]
+    public void WithoutTheDlcADlcWorldIsNeverCounted()
+    {
+        var tracker = new RoomProgressTracker();
+        Assert.Equal(0, tracker.Enter(8, 100, Battle));
+        Assert.Equal(0, tracker.Enter(8, 101, Battle, dlcActive: false));
+        Assert.Equal(0, tracker.Enter(14, 102, Battle, dlcActive: false));
+    }
+
+    [Fact]
+    public void WithTheDlcTheDlcWorldsCountRoomsLikeBaseWorlds()
+    {
+        var tracker = new RoomProgressTracker();
+        Assert.Equal(1, tracker.Enter(8, 100, Battle, dlcActive: true));
+        Assert.Equal(2, tracker.Enter(8, 101, Battle, dlcActive: true));
+        Assert.Equal(2, tracker.Enter(8, 101, Battle, dlcActive: true));
+        Assert.Equal(3, tracker.Enter(8, 102, Battle, dlcActive: true));
+    }
+
+    [Fact]
+    public void MovingToAnotherWorldRestartsTheDepthIncludingFromABaseWorldToADlcWorld()
+    {
+        var tracker = new RoomProgressTracker();
+        tracker.Enter(1, 1, Battle, dlcActive: true);
+        tracker.Enter(1, 2, Battle, dlcActive: true);
+        Assert.Equal(1, tracker.Enter(8, 50, Battle, dlcActive: true));
+    }
+
+    [Fact]
+    public void TheBaseBehaviourIsUnchangedByTheDlcOverload()
+    {
+        var withFlag = new RoomProgressTracker();
+        var without = new RoomProgressTracker();
+        foreach (var (area, room) in new[] { (1, 1), (1, 2), (1, 2), (2, 3), (2, 4), (6, 9), (3, 10) })
+            Assert.Equal(without.Enter(area, room, Battle), withFlag.Enter(area, room, Battle, dlcActive: false));
+    }
+
+    [Fact]
+    public void TheNexusBetweenRunsStillResetsTheDepth()
+    {
+        var tracker = new RoomProgressTracker();
+        tracker.Enter(9, 1, Battle, dlcActive: true);
+        tracker.Enter(9, 2, Battle, dlcActive: true);
+        tracker.Enter(RoomProgressTracker.NexusArea, 3, Battle, dlcActive: true);
+        Assert.Equal(1, tracker.Enter(9, 4, Battle, dlcActive: true));
+    }
+}
+
+public class DlcCatalogTests
+{
+    private static readonly CatalogData Catalog = GameCatalog.Data;
+
+    [Fact]
+    public void TheDlcSectionHasExactlyTheContentTheGameReported()
+    {
+        Assert.Equal(10, Catalog.Dlc.Skills.Count);
+        Assert.Equal(2, Catalog.Dlc.Weapons.Count);
+        Assert.Equal(4, Catalog.Dlc.Minibosses.Count);
+        Assert.Equal(6, Catalog.Dlc.Bosses.Count);
+        Assert.Equal(19, Catalog.Dlc.WeaponMods.Count);
+        Assert.Equal(18, Catalog.Dlc.RoomMilestones.Count);
+        Assert.Equal(10, Catalog.Dlc.RelicOrbs.Count);
+        Assert.Equal(5, Catalog.Dlc.Regions.Count);
+    }
+
+    [Fact]
+    public void TheBaseSectionsAreUntouchedByTheDlc()
+    {
+        Assert.Equal(10, Catalog.Skills.Count);
+        Assert.Equal(7, Catalog.StandardSkills.Count);
+        Assert.Equal(6, Catalog.Weapons.Count);
+        Assert.Equal(16, Catalog.Minibosses.Count);
+        Assert.Equal(14, Catalog.Bosses.Count);
+        Assert.Equal(30, Catalog.EmberTree.Count);
+        Assert.Equal(87, Catalog.WeaponMods.Count);
+        Assert.Equal(18, Catalog.RoomMilestones.Count);
+        Assert.Equal(53, Catalog.RelicOrbs.Count);
+    }
+
+    [Fact]
+    public void EveryDlcIdIsClearOfEveryBaseIdAndOfEachOther()
+    {
+        var baseItems = new List<long>();
+        baseItems.AddRange(Enumerable.Range(0, Catalog.Skills.Count).Select(Catalog.SkillItemId));
+        baseItems.AddRange(Enumerable.Range(0, Catalog.StandardSkills.Count).Select(Catalog.StandardSkillItemId));
+        baseItems.AddRange(Enumerable.Range(0, Catalog.Weapons.Count).Select(Catalog.WeaponItemId));
+        baseItems.AddRange(Enumerable.Range(0, Catalog.Fillers.Count).Select(Catalog.FillerItemId));
+        baseItems.AddRange(Enumerable.Range(0, Catalog.RelicOrbs.Count).Select(Catalog.RelicItemId));
+        baseItems.Add(Catalog.HeatReductionItemId);
+        var dlcItems = new List<long>();
+        dlcItems.AddRange(Enumerable.Range(0, 10).Select(Catalog.DlcSkillItemId));
+        dlcItems.AddRange(Enumerable.Range(0, 2).Select(Catalog.DlcWeaponItemId));
+        dlcItems.AddRange(Enumerable.Range(0, 10).Select(Catalog.DlcRelicItemId));
+        Assert.Empty(baseItems.Intersect(dlcItems));
+        Assert.Equal(dlcItems.Count, dlcItems.Distinct().Count());
+
+        var baseLocations = new List<long>();
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.Skills.Count).Select(Catalog.SkillLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.Minibosses.Count).Select(Catalog.MinibossLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.Bosses.Count).Select(Catalog.BossLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.EmberTree.Count).Select(Catalog.EmberTreeLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.WeaponMods.Count).Select(Catalog.WeaponModLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.RoomMilestones.Count).Select(Catalog.RoomMilestoneLocationId));
+        baseLocations.AddRange(Enumerable.Range(0, Catalog.RelicOrbs.Count).Select(Catalog.RelicOrbLocationId));
+        var dlcLocations = new List<long>();
+        dlcLocations.AddRange(Enumerable.Range(0, 10).Select(Catalog.DlcSkillLocationId));
+        dlcLocations.AddRange(Enumerable.Range(0, 4).Select(Catalog.DlcMinibossLocationId));
+        dlcLocations.AddRange(Enumerable.Range(0, 6).Select(Catalog.DlcBossLocationId));
+        dlcLocations.AddRange(Enumerable.Range(0, 19).Select(Catalog.DlcWeaponModLocationId));
+        dlcLocations.AddRange(Enumerable.Range(0, 18).Select(Catalog.DlcRoomMilestoneLocationId));
+        dlcLocations.AddRange(Enumerable.Range(0, 10).Select(Catalog.DlcRelicOrbLocationId));
+        Assert.Empty(baseLocations.Intersect(dlcLocations));
+        Assert.Equal(dlcLocations.Count, dlcLocations.Distinct().Count());
+    }
+
+    [Fact]
+    public void TheIdOffsetsAreExactlyTheOnesTheWorldUses()
+    {
+        // These numbers are written into every generated seed. They must never drift from catalog.py.
+        Assert.Equal(Catalog.IdBase + 500L, Catalog.DlcSkillItemId(0));
+        Assert.Equal(Catalog.IdBase + 520L, Catalog.DlcWeaponItemId(0));
+        Assert.Equal(Catalog.IdBase + 540L, Catalog.DlcRelicItemId(0));
+        Assert.Equal(Catalog.IdBase + 8000L, Catalog.DlcSkillLocationId(0));
+        Assert.Equal(Catalog.IdBase + 8100L, Catalog.DlcMinibossLocationId(0));
+        Assert.Equal(Catalog.IdBase + 8200L, Catalog.DlcBossLocationId(0));
+        Assert.Equal(Catalog.IdBase + 8300L, Catalog.DlcWeaponModLocationId(0));
+        Assert.Equal(Catalog.IdBase + 8400L, Catalog.DlcRoomMilestoneLocationId(0));
+        Assert.Equal(Catalog.IdBase + 8500L, Catalog.DlcRelicOrbLocationId(0));
+    }
+
+    [Fact]
+    public void DlcOrbsAreNumberedAfterTheBaseOrbs()
+    {
+        var names = Catalog.Dlc.RelicOrbs.Select(orb => orb.LocationName).ToList();
+        Assert.Equal(Enumerable.Range(54, 10).Select(n => $"Relic Orb {n}").ToList(), names);
+        Assert.Equal("Relic Orb 01", Catalog.RelicOrbs[0].LocationName);
+        Assert.Equal("Relic Orb 53", Catalog.RelicOrbs[^1].LocationName);
+    }
+
+    [Fact]
+    public void EveryDlcNameResolvesSoNothingIsEverShownAsAnItemNumber()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.Equal(Catalog.Dlc.Skills[i].Name, Catalog.GetItemName(Catalog.DlcSkillItemId(i)));
+            Assert.Equal(Catalog.Dlc.Skills[i].LocationName, Catalog.GetLocationName(Catalog.DlcSkillLocationId(i)));
+            Assert.Equal(Catalog.Dlc.RelicOrbs[i].Name, Catalog.GetItemName(Catalog.DlcRelicItemId(i)));
+            Assert.Equal(Catalog.Dlc.RelicOrbs[i].LocationName, Catalog.GetLocationName(Catalog.DlcRelicOrbLocationId(i)));
+        }
+        Assert.Equal("Hyper Gloves", Catalog.GetItemName(Catalog.DlcWeaponItemId(0)));
+        Assert.Equal("Ember Buster", Catalog.GetItemName(Catalog.DlcWeaponItemId(1)));
+        Assert.Equal("Oukranos Defeated", Catalog.GetLocationName(Catalog.DlcBossLocationId(0)));
+    }
+
+    [Fact]
+    public void ADlcLookupNeverReturnsABaseEntryAndABaseLookupNeverReturnsADlcOne()
+    {
+        foreach (var skill in Catalog.Dlc.Skills)
+        {
+            Assert.Null(Catalog.SkillForAbility(skill.AbilityId));
+            Assert.NotNull(Catalog.DlcSkillForAbility(skill.AbilityId));
+        }
+        foreach (var skill in Catalog.Skills)
+            Assert.Null(Catalog.DlcSkillForAbility(skill.AbilityId));
+        foreach (var weapon in Catalog.Dlc.Weapons)
+        {
+            Assert.False(Catalog.IsRandomizedWeapon(weapon.WeaponId));
+            Assert.True(Catalog.IsDlcWeapon(weapon.WeaponId));
+        }
+        foreach (var weapon in Catalog.Weapons)
+            Assert.False(Catalog.IsDlcWeapon(weapon.WeaponId));
+        foreach (var orb in Catalog.Dlc.RelicOrbs)
+        {
+            Assert.False(Catalog.IsOrbRelic(orb.DefId));
+            Assert.True(Catalog.IsDlcOrbRelic(orb.DefId));
+        }
+        foreach (var orb in Catalog.RelicOrbs)
+            Assert.False(Catalog.IsDlcOrbRelic(orb.DefId));
+        foreach (var encounter in Catalog.Dlc.Bosses.Concat(Catalog.Dlc.Minibosses))
+        {
+            foreach (var enemy in encounter.EnemyIds)
+            {
+                Assert.Null(Catalog.BossForEnemy(enemy));
+                Assert.Null(Catalog.MinibossForEnemy(enemy));
+            }
+        }
+    }
+
+    [Fact]
+    public void ADlcItemIdIsNeverMistakenForABaseItem()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.Null(Catalog.SkillForItem(Catalog.DlcSkillItemId(i)));
+            Assert.Null(Catalog.StandardSkillForItem(Catalog.DlcSkillItemId(i)));
+            Assert.Null(Catalog.RelicForItem(Catalog.DlcRelicItemId(i)));
+            Assert.NotNull(Catalog.DlcSkillForItem(Catalog.DlcSkillItemId(i)));
+            Assert.NotNull(Catalog.DlcRelicForItem(Catalog.DlcRelicItemId(i)));
+        }
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.Null(Catalog.WeaponForItem(Catalog.DlcWeaponItemId(i)));
+            Assert.NotNull(Catalog.DlcWeaponForItem(Catalog.DlcWeaponItemId(i)));
+        }
+        Assert.Null(Catalog.DlcSkillForItem(Catalog.SkillItemId(0)));
+        Assert.Null(Catalog.DlcWeaponForItem(Catalog.WeaponItemId(0)));
+        Assert.Null(Catalog.DlcRelicForItem(Catalog.RelicItemId(0)));
+    }
+
+    [Fact]
+    public void DlcRelicIdsAreTheTenTheGameListedAndTheArchitectHasAReborn()
+    {
+        Assert.Equal(Enumerable.Range(211, 10).ToArray(), Catalog.Dlc.RelicOrbs.Select(orb => orb.DefId).ToArray());
+        Assert.Equal(new[] { 8, 9 }, Catalog.Dlc.Weapons.Select(weapon => weapon.WeaponId).ToArray());
+        var architect = Catalog.Dlc.Bosses.Single(boss => boss.Name == "The Architect");
+        var reborn = Catalog.Dlc.Bosses.Single(boss => boss.Name == "The Architect Reborn");
+        Assert.False(architect.Variant);
+        Assert.True(reborn.Variant);
+        Assert.Equal(new[] { 149 }, architect.EnemyIds);
+        Assert.Equal(new[] { 161 }, reborn.EnemyIds);
+    }
+
+    [Fact]
+    public void ADlcMilestoneOnlyMatchesItsOwnWorldsAreaNumber()
+    {
+        Assert.Contains(Catalog.DlcMilestonesFor(8, 3), m => m.World == "Mystic Forest" && m.Room == 3);
+        Assert.Empty(Catalog.DlcMilestonesFor(1, 7));
+        Assert.Empty(Catalog.MilestonesFor(8, 7));
+        Assert.Equal(new[] { 8, 9, 10, 11, 14 }, Catalog.Dlc.RoomMilestones.Select(m => m.AreaName).Distinct().ToArray());
+    }
+
+    [Fact]
+    public void TheDlcOrbCheckIsOnlyReachableForOrbNumbersOneToTen()
+    {
+        Assert.Null(Catalog.LocationForDlcRelicOrb(0));
+        Assert.NotNull(Catalog.LocationForDlcRelicOrb(1));
+        Assert.NotNull(Catalog.LocationForDlcRelicOrb(10));
+        Assert.Null(Catalog.LocationForDlcRelicOrb(11));
+        Assert.Equal(Catalog.DlcRelicOrbLocationId(0), Catalog.LocationForDlcRelicOrb(1));
+    }
+}
+
+public class DlcSessionStateTests
+{
+    [Fact]
+    public void AStateFileFromBeforeTheDlcLoadsWithSafeDefaults()
+    {
+        const string json = "{\"Version\":1,\"Seed\":\"123\",\"SlotName\":\"p\",\"NextItemIndex\":12,\"OrbsCollected\":7,\"RelicsRevealed\":3,\"PendingChecks\":[],\"PendingFillers\":[],\"GoalPending\":false}";
+        var state = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json)!;
+        Assert.Equal(0, state.DlcOrbsCollected);
+        Assert.Equal(0, state.DlcRelicsRevealed);
+        Assert.False(state.DlcBaselineTaken);
+        Assert.Empty(state.BaselineDlcWeaponMods);
+        // The base counters are untouched.
+        Assert.Equal(7, state.OrbsCollected);
+        Assert.Equal(3, state.RelicsRevealed);
+    }
+
+    [Fact]
+    public void TheDlcCountersSurviveASaveAndLoad()
+    {
+        var state = new SessionState { Seed = "s", DlcOrbsCollected = 4, DlcRelicsRevealed = 2, DlcBaselineTaken = true };
+        state.BaselineDlcWeaponMods.AddRange(new[] { 99, 100, 108 });
+        var back = System.Text.Json.JsonSerializer.Deserialize<SessionState>(System.Text.Json.JsonSerializer.Serialize(state))!;
+        Assert.Equal(4, back.DlcOrbsCollected);
+        Assert.Equal(2, back.DlcRelicsRevealed);
+        Assert.True(back.DlcBaselineTaken);
+        Assert.Equal(new[] { 99, 100, 108 }, back.BaselineDlcWeaponMods.ToArray());
+    }
+}

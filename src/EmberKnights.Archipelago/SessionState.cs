@@ -34,6 +34,21 @@ public sealed class SessionState
     /// <summary>Weapon mod ids that were already unlocked at first connect and are not checks.</summary>
     public List<int> BaselineWeaponMods { get; set; } = new();
 
+    /// <summary>
+    /// DLC orbs collected so far, counted on their own because the game hands out DLC orb relics from a separate list.
+    /// Zero in a state file written before the DLC existed in the plugin, which is the right starting value.
+    /// </summary>
+    public int DlcOrbsCollected { get; set; }
+
+    /// <summary>DLC orbs Esper has already identified (the DLC counterpart of <see cref="RelicsRevealed"/>).</summary>
+    public int DlcRelicsRevealed { get; set; }
+
+    /// <summary>Weapon mods that were already unlocked when this seed first connected with the DLC on.</summary>
+    public List<int> BaselineDlcWeaponMods { get; set; } = new();
+
+    /// <summary>True once the DLC weapon mod baseline has been recorded for this seed (see <see cref="BaselineDlcWeaponMods"/>).</summary>
+    public bool DlcBaselineTaken { get; set; }
+
     public List<long> PendingChecks { get; set; } = new();
     public List<long> PendingFillers { get; set; } = new();
     public bool GoalPending { get; set; }
