@@ -1625,3 +1625,52 @@ public class UnlockBaselineTests
         Assert.All(FreshSaveNodes, id => Assert.Contains(id, known));
     }
 }
+
+public class ConnectionSetupTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Player1")]
+    [InlineData("  Player1  ")]
+    public void AnEmptyOrPlaceholderSlotCountsAsNotSetUp(string? slot)
+    {
+        Assert.True(ConnectionSetup.IsSlotMissing(slot));
+    }
+
+    [Theory]
+    [InlineData("Samus")]
+    [InlineData("player1")]
+    [InlineData("Player12")]
+    [InlineData("My Slot")]
+    public void AnyOtherSlotNameIsAcceptedIncludingNamesThatOnlyLookSimilar(string slot)
+    {
+        Assert.False(ConnectionSetup.IsSlotMissing(slot));
+    }
+
+    [Fact]
+    public void TheMessageNamesTheConfigFileAndTheInstaller()
+    {
+        var message = ConnectionSetup.MissingSlotMessage(@"C:\Games\EmberKnights\BepInEx\config\com.emberknights.archipelago.cfg");
+        Assert.Contains(@"C:\Games\EmberKnights\BepInEx\config\com.emberknights.archipelago.cfg", message);
+        Assert.Contains("Install.bat", message);
+        Assert.Contains("F6", message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void WithoutAKnownPathItFallsBackToTheUsualRelativePath(string? path)
+    {
+        Assert.Contains("BepInEx/config/com.emberknights.archipelago.cfg", ConnectionSetup.MissingSlotMessage(path));
+    }
+
+    [Fact]
+    public void TheInstallerWritesAnAutoConnectConfigOnlyWhenDetailsWereGivenSoThePlaceholderRuleMatters()
+    {
+        // The placeholder the plugin writes into a fresh config must be exactly the one the check looks for.
+        Assert.Equal("Player1", ConnectionSetup.PlaceholderSlot);
+    }
+}

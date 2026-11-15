@@ -17,17 +17,31 @@ Both are on the [Releases page](../../releases). The APWorld is released separat
 
 ## Install
 
-You need Ember Knights on PC, and Archipelago **0.6.8 or newer** to generate a seed.
+You need Ember Knights on PC (Steam), and Archipelago **0.6.8 or newer** to generate a seed. The client mod and the APWorld are installed separately.
 
-### 1. Install the client plugin (once per game install)
+### 1. Install the client mod (Windows, Steam)
 
-1. **Install BepInEx 6 (Unity IL2CPP, 64-bit, `6.0.0-be.791` or newer)** into your Ember Knights folder, the one that contains `EmberKnights.exe`. Extract the BepInEx zip there, so that `winhttp.dll` and a `BepInEx` folder sit next to the game executable.
-2. **Start the game once and close it.** The first start is slow because BepInEx generates the files it needs (the `BepInEx/interop` folder). Wait until the main menu appears before closing.
-3. **Close the game.** Download `EmberKnights.Archipelago-vX.Y.Z.zip` from the Releases page and extract it into the game folder. When asked, let it merge folders. You should now have `BepInEx/plugins/EmberKnights.Archipelago/EmberKnights.Archipelago.dll`.
-4. **Start the game once more and close it.** BepInEx now writes `BepInEx/config/com.emberknights.archipelago.cfg`.
+1. Download `EmberKnights.Archipelago-vX.Y.Z.zip` from the [Releases page](../../releases) and **extract the whole zip** into a folder (right-click, Extract All). Do not run anything from inside the zip window.
+2. **Close Ember Knights**, then double-click **`Install.bat`**.
+   It finds your game through Steam, installs BepInEx and the mod, and asks for your server address, port and slot name. Press Enter to skip any question; you can set them later. If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.
+3. **Start Ember Knights from Steam.** The first start is slow (a minute or two) because BepInEx prepares files for the game on your PC. Wait for the main menu.
+4. Load a **single-player** save. If you gave your connection details, the mod connects by itself. Otherwise press **F6**.
 
-To update later, close the game and extract the newer zip over the old files. Your config file and save data are not in the zip and are not touched.
+That is the whole install. To update, close the game and run `Install.bat` from the newer zip again; your settings and progress are kept. To remove the mod, run `Uninstall.bat` (it keeps BepInEx and your saves), or `Install.bat -Uninstall -RemoveBepInEx` from a Command Prompt to remove BepInEx too.
 
+What the installer changes: it adds BepInEx (`winhttp.dll`, `doorstop_config.ini`, and the `BepInEx` and `dotnet` folders) and `BepInEx/plugins/EmberKnights.Archipelago` to the game folder, and writes `BepInEx/config/com.emberknights.archipelago.cfg`. The BepInEx download is checked against a known SHA-256 before anything is installed. It never touches your save files. The script is plain text; open `Install-EmberKnightsArchipelago.ps1` in Notepad to read exactly what it does.
+
+If the installer cannot find your game, run it from a Command Prompt with `Install.bat -GamePath "D:\path\to\EmberKnights"`. If the BepInEx download is blocked, download the zip it names yourself and add `-BepInExZip "C:\path\to\that.zip"`.
+
+<details>
+<summary>Manual install (if you already use BepInEx 6 IL2CPP, or are not on Windows/Steam)</summary>
+
+1. Install **BepInEx 6 (Unity IL2CPP, 64-bit, `6.0.0-be.791` or newer)** into the game folder, the one containing `EmberKnights_64.exe`, so that `winhttp.dll` and a `BepInEx` folder sit next to it.
+2. Start the game once and wait for the main menu, then close it. This generates the files BepInEx needs.
+3. Copy the `BepInEx` folder from the mod zip into the game folder, merging folders. You should have `BepInEx/plugins/EmberKnights.Archipelago/EmberKnights.Archipelago.dll`.
+4. Start the game once more, close it, then edit `BepInEx/config/com.emberknights.archipelago.cfg` (see [Plugin config](#plugin-config)).
+
+</details>
 ### 2. Install the APWorld
 
 1. Download `ember_knights.apworld` from the Releases page (the `apworld-vX.Y.Z` release).
@@ -175,6 +189,7 @@ No game code, game assets, or data extracted from the game: no game binaries, no
 ```
 apworld/ember_knights/        Archipelago world + tests
 src/EmberKnights.Archipelago/ BepInEx client plugin
+installer/                    Install.bat + PowerShell installer, uninstaller, packaging and installer tests
 tools/ClientTests/            xUnit tests for pure logic (no game needed)
 tools/RelicDump/              in-game relic definition dumper (needs the game)
 tools/HeatProbe/              in-game read-only difficulty snapshot (F9)

@@ -21,6 +21,7 @@
     <Compile Include="..\..\src\EmberKnights.Archipelago\LogBuffer.cs" Link="LogBuffer.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\LogFormatter.cs" Link="LogFormatter.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\UnlockBaseline.cs" Link="UnlockBaseline.cs" />
+    <Compile Include="..\..\src\EmberKnights.Archipelago\ConnectionSetup.cs" Link="ConnectionSetup.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\SessionState.cs" Link="SessionState.cs" />
     <Compile Include="..\..\src\EmberKnights.Archipelago\FocusFade.cs" Link="FocusFade.cs" />
     <EmbeddedResource Include="..\..\apworld\ember_knights\catalog.json" LogicalName="EmberKnights.Archipelago.catalog.json" />

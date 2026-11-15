@@ -1,0 +1,4 @@
+# Batch files must keep Windows line endings or cmd.exe can misread them, whatever git's autocrlf setting is.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+installer/README.txt text eol=crlf

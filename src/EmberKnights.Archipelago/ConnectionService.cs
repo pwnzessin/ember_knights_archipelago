@@ -51,7 +51,7 @@ public sealed class ConnectionService
     {
         "Configure the connection in BepInEx/config/com.emberknights.archipelago.cfg",
     };
-    private string lastMessage = "Configure the connection in BepInEx/config/com.emberknights.archipelago.cfg";
+    private string lastMessage = "Not set up yet: run Install.bat, or set slot_name in BepInEx/config/com.emberknights.archipelago.cfg";
 
     public bool IsActive { get; private set; }
     public bool IsConnected => loggedIn && session is not null;
@@ -98,9 +98,9 @@ public sealed class ConnectionService
     {
         if (disposed || connecting || IsConnected)
             return;
-        if (string.IsNullOrWhiteSpace(plugin.SlotName.Value))
+        if (ConnectionSetup.IsSlotMissing(plugin.SlotName.Value))
         {
-            LastMessage = "Set slot_name in the BepInEx configuration before connecting.";
+            LastMessage = ConnectionSetup.MissingSlotMessage(plugin.Config.ConfigFilePath);
             return;
         }
 
