@@ -96,6 +96,73 @@ internal static class StandardSkillPolicy
         starting is null || starting.Contains(abilityId) || received.Contains(abilityId);
 }
 
+/// <summary>
+/// Which relics a seed starts with when it uses the starting_relics option. All relics (the 43 the game unlocks for
+/// free, the 53 base orb relics and the 10 DLC orb relics) form one pool; the seed starts with a random few of them and
+/// the rest only arrive from the multiworld. Pure logic with no game dependencies.
+/// </summary>
+internal static class StartingRelicPolicy
+{
+    /// <summary>
+    /// Reads <c>starting_relic_ids</c> from slot data. Returns null when the seed does not carry the key (generated
+    /// before the option existed): such seeds leave the 43 default relics unlocked exactly as the base game does, so an
+    /// old save is never locked out of relics it already had. A present key, even an empty one, turns gating on.
+    /// Ids that are not relics of this game are ignored.
+    /// </summary>
+    public static HashSet<int>? ReadStartingRelics(object? raw, Func<int, bool> isKnownRelic)
+    {
+        if (raw is null || raw is string || raw is not System.Collections.IEnumerable enumerable)
+            return null;
+        var result = new HashSet<int>();
+        foreach (var element in enumerable)
+        {
+            try
+            {
+                var id = Convert.ToInt32(element);
+                if (isKnownRelic(id))
+                    result.Add(id);
+            }
+            catch (Exception)
+            {
+                // Skip anything that is not a number rather than failing the whole connection.
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Whether the plugin controls a default relic (one of the 43 the game unlocks for free). It does only when the
+    /// seed gates them, which is when the slot data carried <c>starting_relic_ids</c> (<paramref name="starting"/> is not null).
+    /// </summary>
+    public static bool IsGated(bool isDefaultRelic, HashSet<int>? starting) => isDefaultRelic && starting is not null;
+
+    /// <summary>
+    /// True when the player owns a relic the seed gates: it is a starting relic or the multiworld has delivered it.
+    /// </summary>
+    public static bool IsUnlocked(int relicDefId, HashSet<int>? starting, IReadOnlySet<int> received) =>
+        (starting is not null && starting.Contains(relicDefId)) || received.Contains(relicDefId);
+}
+
+/// <summary>
+/// The first shop of a new save is a scripted "FTUE" shop: its slots carry forced items (Apple Pie, Bone Plate and
+/// Tainted Conduit) that the game places regardless of what the player owns. With gated relics that would offer relics
+/// the seed has not given out, so the forced relic slots are turned into ordinary slots while the plugin is active.
+/// The free Apple Pie is a tutorial gift and stays. Pure logic with no game dependencies.
+/// </summary>
+internal static class FirstShopPolicy
+{
+    /// <summary>The game's drop type for a relic in a shop slot (<c>eDropType.Relic</c>).</summary>
+    public const int RelicDropType = 7;
+
+    /// <summary>
+    /// True when a shop slot entry is a scripted relic that has to be turned into a normal one: the entry forces a
+    /// specific item (<paramref name="hasFtueOverrides"/>) and that item is a relic. Forced food, potions and gifts
+    /// are left alone.
+    /// </summary>
+    public static bool ShouldClearOverride(bool hasFtueOverrides, int dropType) =>
+        hasFtueOverrides && dropType == RelicDropType;
+}
+
 /// <summary>What the multiworld holds at one "Relic Orb N" location, from a silent scout.</summary>
 internal sealed class ScoutedOrb
 {

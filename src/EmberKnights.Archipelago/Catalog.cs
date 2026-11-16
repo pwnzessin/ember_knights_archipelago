@@ -58,6 +58,16 @@ public sealed class RelicOrbDefinition
     public string LocationName => $"Relic Orb {Order + NumberOffset:D2}";
 }
 
+/// <summary>
+/// A relic the game unlocks for every new save. It is not an orb relic, so it has no orb and no location; with the
+/// starting_relics option it is only an item.
+/// </summary>
+public sealed class DefaultRelicDefinition
+{
+    public int DefId { get; set; }
+    public string Name { get; set; } = "";
+}
+
 public sealed class HeatModifierDefinition
 {
     public int Id { get; set; }
@@ -115,6 +125,7 @@ public sealed class CatalogData
     public List<WeaponModDefinition> WeaponMods { get; set; } = new();
     public List<RoomMilestoneDefinition> RoomMilestones { get; set; } = new();
     public List<RelicOrbDefinition> RelicOrbs { get; set; } = new();
+    public List<DefaultRelicDefinition> DefaultRelics { get; set; } = new();
     public HeatCatalogDefinition Heat { get; set; } = new();
     public DlcCatalogDefinition Dlc { get; set; } = new();
 
@@ -126,6 +137,7 @@ public sealed class CatalogData
     private readonly Dictionary<int, int> weaponModIndexByDefId = new();
     private readonly Dictionary<int, int> relicIndexByDefId = new();
     private readonly Dictionary<int, int> dlcRelicIndexByDefId = new();
+    private readonly Dictionary<int, int> defaultRelicIndexByDefId = new();
     private readonly Dictionary<int, int> dlcWeaponModIndexByDefId = new();
 
     public long SkillItemId(int index) => IdBase + 1 + index;
@@ -141,6 +153,7 @@ public sealed class CatalogData
     public long RelicOrbLocationId(int index) => IdBase + 7000 + index;
     public long RelicItemId(int index) => IdBase + 300 + index;
     public long HeatReductionItemId => IdBase + 400;
+    public long DefaultRelicItemId(int index) => IdBase + 600 + index;
 
     public long DlcSkillItemId(int index) => IdBase + 500 + index;
     public long DlcWeaponItemId(int index) => IdBase + 520 + index;
@@ -188,6 +201,11 @@ public sealed class CatalogData
             relicIndexByDefId[RelicOrbs[i].DefId] = i;
         }
         itemNames[HeatReductionItemId] = HeatReductionItemName;
+        for (var i = 0; i < DefaultRelics.Count; i++)
+        {
+            itemNames[DefaultRelicItemId(i)] = DefaultRelics[i].Name;
+            defaultRelicIndexByDefId[DefaultRelics[i].DefId] = i;
+        }
 
         // The names of every DLC entry are always known, whether or not a seed uses the DLC, so a received item or a
         // hint for one is never shown as "Item 113523500".
@@ -221,6 +239,16 @@ public sealed class CatalogData
     public bool IsHeatReductionItem(long itemId) => itemId == HeatReductionItemId;
 
     public bool IsOrbRelic(int defId) => relicIndexByDefId.ContainsKey(defId);
+
+    /// <summary>True for one of the 43 relics the game unlocks for every new save. Orb relics never match.</summary>
+    public bool IsDefaultRelic(int defId) => defaultRelicIndexByDefId.ContainsKey(defId);
+
+    /// <summary>The default relic this item grants, or null when the item is not one.</summary>
+    public DefaultRelicDefinition? DefaultRelicForItem(long itemId)
+    {
+        var index = itemId - IdBase - 600;
+        return index >= 0 && index < DefaultRelics.Count ? DefaultRelics[(int)index] : null;
+    }
 
     /// <summary>True for one of the 10 DLC orb relics (ids 211 to 220). Base orbs never match.</summary>
     public bool IsDlcOrbRelic(int defId) => dlcRelicIndexByDefId.ContainsKey(defId);
@@ -375,7 +403,8 @@ public static class GameCatalog
         if (catalog.Skills.Count != 10 || catalog.StandardSkills.Count != 7 || catalog.Weapons.Count != 6 ||
             catalog.Minibosses.Count != 16 || catalog.Bosses.Count != 14 ||
             catalog.EmberTree.Count != 30 || catalog.WeaponMods.Count != 87 || catalog.RoomMilestones.Count != 18 ||
-            catalog.RelicOrbs.Count != 53 || catalog.Heat.MaxHeat != 55 || catalog.Heat.Modifiers.Count != 17 ||
+            catalog.RelicOrbs.Count != 53 || catalog.DefaultRelics.Count != 43 ||
+            catalog.Heat.MaxHeat != 55 || catalog.Heat.Modifiers.Count != 17 ||
             catalog.Fillers.Count != 8)
             throw new InvalidOperationException("Archipelago catalog counts do not match the supported game version.");
         if (catalog.Dlc.Skills.Count != 10 || catalog.Dlc.Weapons.Count != 2 || catalog.Dlc.Minibosses.Count != 4 ||

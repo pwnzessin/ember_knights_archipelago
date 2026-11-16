@@ -36,11 +36,13 @@ class EmberKnightsWorld(World):
         | {skill.name for skill in CATALOG.dlc_skills},
         "Standard Skills": {skill.name for skill in CATALOG.standard_skills},
         "Weapons": {weapon.name for weapon in CATALOG.weapons} | {weapon.name for weapon in CATALOG.dlc_weapons},
-        "Relics": {orb.name for orb in CATALOG.relic_orbs} | {orb.name for orb in CATALOG.dlc_relic_orbs},
+        "Relics": {orb.name for orb in CATALOG.relic_orbs}
+        | {orb.name for orb in CATALOG.dlc_relic_orbs}
+        | {relic.name for relic in CATALOG.default_relics},
         "Heat": {CATALOG.heat_reduction_item_name},
         "Archipelago Coins": {bundle.name for bundle in CATALOG.coin_bundles},
         "Traps": {trap.name for trap in CATALOG.trap_items},
-        "Resources": {"50 Gold", CATALOG.ash_item_name},
+        "Resources": {"50 Gold", CATALOG.ash_item_name},  # 50 Gold is retired from the pool but kept for old seeds
     }
     location_name_groups = {
         "Ember Tree": {node.location_name for node in CATALOG.ember_tree},
@@ -73,6 +75,16 @@ class EmberKnightsWorld(World):
         self.starting_weapon_ids: list[int] = [1]
         self.dlc_enabled = False
         self.starting_standard_skill_ids: list[int] = []
+        self.starting_relic_ids: list[int] = []
+
+    def relic_pool(self) -> list[tuple[int, str]]:
+        """Every relic this seed can hold as an item: the 43 relics the game unlocks for free, the 53 base orb relics
+        and, with the DLC, the 10 DLC orb relics. Ordered by relic id so the same seed always rolls the same way."""
+        pool = {relic.def_id: relic.name for relic in CATALOG.default_relics}
+        pool.update({orb.def_id: orb.name for orb in CATALOG.relic_orbs})
+        if self.dlc_enabled:
+            pool.update({orb.def_id: orb.name for orb in CATALOG.dlc_relic_orbs})
+        return sorted(pool.items())
 
     def generate_early(self) -> None:
         self.dlc_enabled = bool(self.options.dlc)
@@ -88,6 +100,14 @@ class EmberKnightsWorld(World):
         self.starting_standard_skill_ids = sorted(skill.ability_id for skill in chosen_skills)
         for skill in chosen_skills:
             self.multiworld.push_precollected(self.create_item(skill.name))
+
+        # Pick which relics this seed starts with, out of the one big pool. The others become items in the pool.
+        pool = self.relic_pool()
+        relic_count = max(10, min(43, int(self.options.starting_relics)))
+        chosen_relics = self.random.sample(pool, relic_count)
+        self.starting_relic_ids = sorted(def_id for def_id, _ in chosen_relics)
+        for _, name in chosen_relics:
+            self.multiworld.push_precollected(self.create_item(name))
 
     def create_item(self, name: str) -> EmberKnightsItem:
         classification = ItemClassification.filler
@@ -116,7 +136,7 @@ class EmberKnightsWorld(World):
         return (span + per_item - 1) // per_item
 
     def get_filler_item_name(self) -> str:
-        return "50 Gold"
+        return CATALOG.ash_item_name
 
     def create_regions(self) -> None:
         menu = Region("Menu", self.player, self.multiworld)
@@ -279,11 +299,12 @@ class EmberKnightsWorld(World):
         permanent_items.extend(
             weapon.name for weapon in CATALOG.weapons if weapon.weapon_id not in self.starting_weapon_ids
         )
-        permanent_items.extend(orb.name for orb in CATALOG.relic_orbs)
+        # Every relic in the big pool that is not a starting relic is an item. The orb relics keep their locations
+        # ("Relic Orb NN"); the 43 default relics have none, so they only add items.
+        permanent_items.extend(name for def_id, name in self.relic_pool() if def_id not in self.starting_relic_ids)
         if self.dlc_enabled:
             permanent_items.extend(skill.name for skill in CATALOG.dlc_skills)
             permanent_items.extend(weapon.name for weapon in CATALOG.dlc_weapons)
-            permanent_items.extend(orb.name for orb in CATALOG.dlc_relic_orbs)
         permanent_items.extend(CATALOG.heat_reduction_item_name for _ in range(self.heat_reduction_item_count()))
         permanent_items.extend(self.coin_bundle_names())
         self.multiworld.itempool += [self.create_item(name) for name in permanent_items]
@@ -306,13 +327,21 @@ class EmberKnightsWorld(World):
         return [name for name, count in self.COIN_BUNDLES_IN_POOL for _ in range(count)]
 
     def filler_pool_names(self, filler_count: int) -> list[str]:
-        """Names for every filler slot. Slots are shared evenly between the enabled kinds: 50 Gold, Ash (unless its
-        amount is 0) and traps (when enabled). Any remainder goes to 50 Gold, which is always enabled."""
-        kinds: list[list[str]] = [["50 Gold"]]
+        """Names for every filler slot. Slots are shared evenly between the enabled kinds: Ash (unless its amount is
+        0) and traps (when enabled). Any remainder goes to the first kind.
+
+        50 Gold is no longer placed: the relic pool added up to 43 items and the Gold slots made room for them. It
+        stays in the catalog because item IDs are positions in the filler list, and a seed that was already generated
+        may still send it. When Ash is set to 0 and traps are off there would be nothing left to place, so the filler
+        falls back to Ash (an Ash item still gives nothing once every unbought upgrade is paid for, which is harmless).
+        """
+        kinds: list[list[str]] = []
         if int(self.options.ash_filler_amount) > 0:
             kinds.append([CATALOG.ash_item_name])
         if self.options.traps:
             kinds.append([trap.name for trap in CATALOG.trap_items])
+        if not kinds:
+            kinds.append([CATALOG.ash_item_name])
 
         share, remainder = divmod(filler_count, len(kinds))
         names: list[str] = []
@@ -331,6 +360,7 @@ class EmberKnightsWorld(World):
             "starting_archipelago_coins",
             "extra_starting_weapons",
             "starting_standard_skills",
+            "starting_relics",
             "ash_filler_amount",
             "traps",
         )
@@ -341,6 +371,10 @@ class EmberKnightsWorld(World):
         # Presence of this key tells the client the standard skills are gated by this seed. Seeds generated before
         # the option existed lack it, and the client then keeps every standard skill unlocked as in the base game.
         slot_data["starting_standard_skill_ids"] = list(self.starting_standard_skill_ids)
+        # Presence of this key tells the client the relics are gated by this seed: the default relics stop being free
+        # and only these ones (plus whatever the multiworld sends) are unlocked. Seeds generated before the option
+        # existed lack it, and the client then leaves every default relic unlocked as in the base game.
+        slot_data["starting_relic_ids"] = list(self.starting_relic_ids)
         slot_data["heat_reroll"] = "once" if self.options.heat_reroll == HeatReroll.option_once else "every_run"
 
         # heat_mode is the single source of truth for how heat is chosen, including whether the curated tiers apply.
@@ -351,5 +385,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.4.0"
+        slot_data["mod_version"] = "1.5.0"
         return slot_data

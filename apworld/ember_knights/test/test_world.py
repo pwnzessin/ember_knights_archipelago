@@ -39,10 +39,16 @@ class TestDefaultWorld(EmberKnightsTestBase):
 
     def test_skills_relics_weapons_and_heat_reductions_match_options(self) -> None:
         item_names = [item.name for item in self.multiworld.itempool]
-        single_items = {skill.name for skill in CATALOG.skills} | {orb.name for orb in CATALOG.relic_orbs}
+        starting_relics = {
+            name for def_id, name in self.world.relic_pool() if def_id in self.world.starting_relic_ids
+        }
+        relic_items = {name for _, name in self.world.relic_pool()} - starting_relics
+        single_items = {skill.name for skill in CATALOG.skills} | relic_items
         self.assertTrue(single_items.issubset(item_names))
         for name in single_items:
             self.assertEqual(1, item_names.count(name), name)
+        for name in starting_relics:
+            self.assertEqual(0, item_names.count(name), name)
         # Default extra_starting_weapons=1 -> Sword (1) + 1 random extra starting weapon, 5 weapons in the pool.
         starting_ids = self.world.starting_weapon_ids
         self.assertEqual(2, len(starting_ids))
@@ -99,7 +105,8 @@ class TestDefaultWorld(EmberKnightsTestBase):
 
     def test_relic_items_are_useful_not_progression(self) -> None:
         relics = [item for item in self.multiworld.itempool if item.name in self.world.item_name_groups["Relics"]]
-        self.assertEqual(53, len(relics))
+        # 53 orb relics + 43 default relics = 96 in the pool, minus the 10 the seed starts with.
+        self.assertEqual(86, len(relics))
         self.assertTrue(all(item.useful and not item.advancement for item in relics))
 
     def test_room_milestones_follow_world_order(self) -> None:
@@ -169,9 +176,9 @@ class TestReducedWorld(EmberKnightsTestBase):
         ash = [item for item in self.multiworld.itempool if item.name == CATALOG.ash_item_name]
         self.assertGreater(len(traps), 0)
         self.assertTrue(all(item.trap and not item.advancement for item in traps))
-        # Gold, Ash and traps share the filler slots three ways; gold takes the remainder (0 to 2 extra).
-        self.assertEqual(len(ash), len(traps))
-        self.assertIn(len(gold) - len(ash), (0, 1, 2))
+        # 50 Gold is retired; Ash and traps share the filler slots two ways, Ash taking the remainder (0 or 1 extra).
+        self.assertEqual(0, len(gold))
+        self.assertIn(len(ash) - len(traps), (0, 1))
         slot_data = self.world.fill_slot_data()
         self.assertEqual("arch_praxis", slot_data["goal"])
         self.assertEqual(30, slot_data["start_heat"])
@@ -212,6 +219,101 @@ class TestFiveStandardSkillsWorld(EmberKnightsTestBase):
         self.assertEqual(2, len([item for item in self.multiworld.itempool if item.name in standard]))
         locations = regular_locations(self)
         self.assertEqual(len(locations), len(self.multiworld.itempool))
+
+
+class TestStartingRelicsDefault(EmberKnightsTestBase):
+    options = {}
+
+    def test_ten_relics_start_unlocked_and_the_rest_are_items(self) -> None:
+        pool = self.world.relic_pool()
+        self.assertEqual(96, len(pool))
+        starting = self.world.starting_relic_ids
+        self.assertEqual(10, len(starting))
+        self.assertEqual(len(starting), len(set(starting)))
+        self.assertTrue(set(starting).issubset({def_id for def_id, _ in pool}))
+        in_pool = {item.name for item in self.multiworld.itempool} & {name for _, name in pool}
+        self.assertEqual({name for def_id, name in pool if def_id not in starting}, in_pool)
+        precollected = {item.name for item in self.multiworld.precollected_items[self.player]}
+        self.assertTrue({name for def_id, name in pool if def_id in starting}.issubset(precollected))
+        self.assertEqual(starting, self.world.fill_slot_data()["starting_relic_ids"])
+        self.assertEqual(10, self.world.fill_slot_data()["starting_relics"])
+
+    def test_pool_still_exactly_fills_the_locations(self) -> None:
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+        # The 43 default relics add items but no locations: the location count is unchanged.
+        self.assertEqual(228, len(regular_locations(self)))
+
+    def test_every_orb_still_has_its_location(self) -> None:
+        names = {location.name for location in regular_locations(self)}
+        self.assertTrue({orb.location_name for orb in CATALOG.relic_orbs}.issubset(names))
+
+
+class TestStartingRelicsMaximum(EmberKnightsTestBase):
+    options = {"starting_relics": 43}
+
+    def test_forty_three_start_and_fifty_three_remain(self) -> None:
+        self.assertEqual(43, len(self.world.starting_relic_ids))
+        relics = [item for item in self.multiworld.itempool if item.name in self.world.item_name_groups["Relics"]]
+        self.assertEqual(96 - 43, len(relics))
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestStartingRelicsWithDlc(EmberKnightsTestBase):
+    options = {"dlc": True, "starting_relics": 20}
+
+    def test_the_dlc_orb_relics_join_the_pool(self) -> None:
+        self.assertEqual(106, len(self.world.relic_pool()))
+        self.assertEqual(20, len(self.world.starting_relic_ids))
+        names = {item.name for item in self.multiworld.itempool}
+        starting = set(self.world.starting_relic_ids)
+        for orb in CATALOG.dlc_relic_orbs:
+            self.assertEqual(orb.def_id not in starting, orb.name in names, orb.name)
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestStartingRelicsTightestPool(EmberKnightsTestBase):
+    """The configuration with the fewest filler slots must still fit all the extra relic items."""
+
+    options = {
+        "boss_variants": False,
+        "starting_standard_skills": 7,
+        "extra_starting_weapons": 0,
+        "start_heat": 0,
+        "minimum_heat": 0,
+        "starting_relics": 10,
+    }
+
+    def test_pool_fits(self) -> None:
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestStartingRelicsCatalogContract(unittest.TestCase):
+    def test_the_option_range_is_ten_to_forty_three(self) -> None:
+        from ..options import StartingRelics
+
+        self.assertEqual(10, StartingRelics.range_start)
+        self.assertEqual(43, StartingRelics.range_end)
+        self.assertEqual(10, StartingRelics.default)
+
+    def test_there_are_forty_three_default_relics_that_are_not_orbs(self) -> None:
+        defaults = CATALOG.default_relics
+        self.assertEqual(43, len(defaults))
+        self.assertEqual(43, len({relic.def_id for relic in defaults}))
+        orb_ids = {orb.def_id for orb in CATALOG.relic_orbs} | {orb.def_id for orb in CATALOG.dlc_relic_orbs}
+        self.assertFalse({relic.def_id for relic in defaults} & orb_ids)
+        # Chronograph is an orb relic, so it is not one of the default relics.
+        self.assertNotIn(40, {relic.def_id for relic in defaults})
+        self.assertEqual([6, 17, 22], [relic.def_id for relic in defaults[:3]])
+
+    def test_default_relic_item_ids_do_not_collide_or_move_anything(self) -> None:
+        base = CATALOG.id_base
+        ids = [CATALOG.item_name_to_id[relic.name] for relic in CATALOG.default_relics]
+        self.assertEqual([base + 600 + i for i in range(43)], ids)
+        all_ids = list(CATALOG.item_name_to_id.values())
+        self.assertEqual(len(all_ids), len(set(all_ids)))
+        # Existing ranges stay exactly where they were.
+        self.assertEqual(base + 300, CATALOG.item_name_to_id[CATALOG.relic_orbs[0].name])
+        self.assertEqual(base + 540, CATALOG.item_name_to_id[CATALOG.dlc_relic_orbs[0].name])
 
 
 class TestStandardSkillCatalogContract(unittest.TestCase):
@@ -295,12 +397,12 @@ class TestDlcOn(EmberKnightsTestBase):
 
     def test_dlc_skills_weapons_and_orb_relics_are_items_exactly_once(self) -> None:
         pool = [item.name for item in self.multiworld.itempool]
-        for name in (
-            [skill.name for skill in CATALOG.dlc_skills]
-            + [weapon.name for weapon in CATALOG.dlc_weapons]
-            + [orb.name for orb in CATALOG.dlc_relic_orbs]
-        ):
+        for name in [skill.name for skill in CATALOG.dlc_skills] + [weapon.name for weapon in CATALOG.dlc_weapons]:
             self.assertEqual(1, pool.count(name), name)
+        # A DLC orb relic is in the pool exactly once, unless the seed starts with it, in which case it is not.
+        starting = set(self.world.starting_relic_ids)
+        for orb in CATALOG.dlc_relic_orbs:
+            self.assertEqual(0 if orb.def_id in starting else 1, pool.count(orb.name), orb.name)
 
     def test_dlc_orbs_continue_the_base_numbering(self) -> None:
         names = [orb.location_name for orb in CATALOG.dlc_relic_orbs]
@@ -434,6 +536,7 @@ class TestCatalogContract(unittest.TestCase):
             + len(CATALOG.standard_skills)
             + len(CATALOG.weapons)
             + len(CATALOG.relic_orbs)
+            + len(CATALOG.default_relics)
             + len(CATALOG.fillers)
             + 1
             + len(CATALOG.dlc_skills)
@@ -533,13 +636,13 @@ def filler_counts(test: EmberKnightsTestBase) -> dict[str, int]:
 
 
 class TestAshFillerDefault(EmberKnightsTestBase):
-    """Default options: no traps, Ash on. Gold and Ash split the filler slots in half."""
+    """Default options: no traps, Ash on. Ash takes every filler slot because 50 Gold is retired."""
 
-    def test_ash_is_a_filler_that_shares_the_slots_with_gold(self) -> None:
+    def test_ash_is_the_only_filler(self) -> None:
         counts = filler_counts(self)
         self.assertEqual(0, counts["traps"])
+        self.assertEqual(0, counts["gold"])
         self.assertGreater(counts["ash"], 0)
-        self.assertIn(counts["gold"] - counts["ash"], (0, 1))
         ash_items = [item for item in self.multiworld.itempool if item.name == CATALOG.ash_item_name]
         self.assertTrue(all(not item.advancement and not item.useful and not item.trap for item in ash_items))
         self.assertEqual(5, self.world.fill_slot_data()["ash_filler_amount"])
@@ -562,11 +665,28 @@ class TestAshFillerDisabled(EmberKnightsTestBase):
 class TestAshFillerWithTraps(EmberKnightsTestBase):
     options = {"ash_filler_amount": 20, "traps": True}
 
-    def test_three_way_split_and_amount_in_slot_data(self) -> None:
+    def test_two_way_split_and_amount_in_slot_data(self) -> None:
         counts = filler_counts(self)
-        self.assertEqual(counts["ash"], counts["traps"])
-        self.assertIn(counts["gold"] - counts["ash"], (0, 1, 2))
+        self.assertEqual(0, counts["gold"])
+        self.assertIn(counts["ash"] - counts["traps"], (0, 1))
         self.assertEqual(20, self.world.fill_slot_data()["ash_filler_amount"])
+
+
+class TestNoFillerKindEnabledFallsBackToAsh(EmberKnightsTestBase):
+    options = {"ash_filler_amount": 0, "traps": False}
+
+    def test_the_pool_still_fills_every_location_without_gold(self) -> None:
+        counts = filler_counts(self)
+        self.assertEqual(0, counts["gold"])
+        self.assertEqual(0, counts["traps"])
+        self.assertGreater(counts["ash"], 0)
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+        self.assertEqual("Ash", self.world.get_filler_item_name())
+
+
+class TestGoldIsRetiredButStillKnown(unittest.TestCase):
+    def test_gold_stays_in_the_catalog_so_old_seeds_still_resolve(self) -> None:
+        self.assertEqual(CATALOG.id_base + 203, CATALOG.item_name_to_id["50 Gold"])
 
 
 class TestAshItemId(unittest.TestCase):

@@ -162,6 +162,76 @@ public static class GameActions
         emberTreeCostsOverridden = true;
     }
 
+    /// <summary>
+    /// The forced relic entries of the scripted first shop, as the game ships them: the entry, and whether it forced an
+    /// item, which one, and at what price. Kept so a disconnect can put the scripted shop back exactly.
+    /// </summary>
+    private static readonly List<(XShopItemDef Entry, bool HasOverrides, int DefId, int Cost)> VanillaFirstShopEntries = new();
+
+    /// <summary>
+    /// Turns the scripted relic slots of the first shop (the "FTUE Shop") into ordinary relic slots. The game forces Bone
+    /// Plate and Tainted Conduit there whatever the player owns, which would hand out relics the multiworld has not
+    /// delivered. With the forced item cleared, the slot is rolled from the normal shop pool, which only offers relics
+    /// the player has unlocked. The free Apple Pie and the other food slots are left as they are. Safe to call again.
+    /// </summary>
+    public static void ApplyFirstShopRandomization()
+    {
+        try
+        {
+            var shops = GameCode.Defs?.shopDataFile?.ShopDefs;
+            if (shops is null)
+                return;
+
+            for (var s = 0; s < shops.Length; s++)
+            {
+                var shop = shops[s];
+                if (shop?.Slots is null)
+                    continue;
+                for (var slot = 0; slot < shop.Slots.Count; slot++)
+                {
+                    var items = shop.Slots[slot]?.Items;
+                    if (items is null)
+                        continue;
+                    for (var i = 0; i < items.Length; i++)
+                    {
+                        var entry = items[i];
+                        if (entry is null || !FirstShopPolicy.ShouldClearOverride(entry.HasFTUEOverrides, (int)entry.DropType))
+                            continue;
+                        if (!VanillaFirstShopEntries.Exists(saved => saved.Entry.Pointer == entry.Pointer))
+                            VanillaFirstShopEntries.Add((entry, entry.HasFTUEOverrides, entry.OverrideDefId, entry.OverrideCost));
+                        entry.HasFTUEOverrides = false;
+                        entry.OverrideDefId = 0;
+                        entry.OverrideCost = 0;
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            ArchipelagoPlugin.LogSource.LogWarning($"Could not randomize the first shop: {exception.Message}");
+        }
+    }
+
+    public static void RestoreVanillaFirstShop()
+    {
+        if (VanillaFirstShopEntries.Count == 0)
+            return;
+        try
+        {
+            foreach (var (entry, hasOverrides, defId, cost) in VanillaFirstShopEntries)
+            {
+                entry.HasFTUEOverrides = hasOverrides;
+                entry.OverrideDefId = defId;
+                entry.OverrideCost = cost;
+            }
+            VanillaFirstShopEntries.Clear();
+        }
+        catch (Exception exception)
+        {
+            ArchipelagoPlugin.LogSource.LogWarning($"Could not restore the scripted first shop: {exception.Message}");
+        }
+    }
+
     public static void RestoreVanillaEmberTreeCosts()
     {
         if (!emberTreeCostsOverridden)

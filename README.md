@@ -9,7 +9,7 @@ An unofficial [Archipelago](https://archipelago.gg) multiworld integration for *
 
 Both are on the [Releases page](../../releases). The APWorld is released separately under tags named `apworld-vX.Y.Z`, because it does not change in every plugin release. Use the newest of each.
 
-> **Status: v1.4, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
+> **Status: v1.5, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
 
 > **AI disclosure:** this project was basically fully vibe-coded; I only reviewed and tested the results in the game and inside of Archipelago lobbies. It has only been playtested a few times. Expect bugs, and any reports about issues you find are greatly appreciated.
 
@@ -67,12 +67,14 @@ Use a fresh save for a new seed. On the first connect of a new seed, anything al
 ## What the mod does
 
 - **Checks:** skill tablets, minibosses, bosses (with optional variants), Ember Tree upgrades, weapon mods (Ash upgrades), world-progress room milestones and relic orbs.
-- **Items:** skills, orb relics, weapons, Heat Reduction, Archipelago Coins, Ash, gold and traps.
+- **Items:** skills, relics, weapons, Heat Reduction, Archipelago Coins, Ash and traps.
 - **Ember Tree:** upgrades cost Archipelago Coins, and normal run Ember no longer feeds the tree while connected.
 - **Reverse Heat:** difficulty starts high and is lowered by Heat Reduction items (see the heat options below).
 - **Relic orbs:** the check is sent the moment you pick up the orb. You still hand the orb to Esper, and her reveal shows what that orb's location really holds. If it is one of your relics you see that relic. If it is anything else, the overlay names the item and the player it is for.
 - **Tooltips:** Ember Tree and Ash upgrades show an `AP:` line naming the item the check holds. On Ember Tree nodes it only appears while the node can be unlocked.
 - **Starting skills:** you start with a random number of the standard skills, and the rest are items in the multiworld (see `starting_standard_skills`). Seeds generated before this option existed keep all standard skills unlocked.
+- **Starting relics:** the base game gives every new save 43 ordinary relics for free (Bone Plate, Meteor, Magic Tome and others), and the other 53 come from relic orbs. All of them form one pool (with the DLC, the ten DLC orb relics join it too). You start with a random number of them (see `starting_relics`), and every other relic is an item in the multiworld. The orb checks do not change, and the 43 formerly free relics add items only, no new locations. Seeds generated before this option existed keep those 43 relics unlocked.
+- **First shop:** the first shop of a new save is scripted to always sell Bone Plate, Tainted Conduit and an Apple Pie. While connected, the two scripted relic slots are rolled normally from the relics you own instead. The free Apple Pie stays. Disconnecting (F7) restores the scripted shop.
 - **DeathLink and traps:** optional. Traps are Enemy Ambush, Boss Ambush and Praxis Arena.
 - **Overlay:** a status box shows connection state, heat and coins, with the latest Archipelago messages. See [HUD log window](#hud-log-window) for the optional in-game version.
 
@@ -93,11 +95,14 @@ These go in your player YAML under `Ember Knights:`. Defaults are in brackets.
 | `starting_archipelago_coins` | 1-25 [1] | Coins you start with. At least 1, so the first Ember Tree node can be bought. |
 | `extra_starting_weapons` | 0-6 [1] | Random extra base-game weapons unlocked from the start, besides the Ember Blade. |
 | `starting_standard_skills` | 3-7 [3] | How many of the seven standard skills you start with, chosen at random. The rest become items. 7 keeps all of them from the start. |
-| `ash_filler_amount` | 0-50 [5] | Ash each Ash item gives. |
-| `traps` | on / off | Split remaining filler between gold and trap items. |
+| `starting_relics` | 10-43 [10] | How many relics you start with, picked at random from one pool of every relic (the 43 the base game gives away, the 53 orb relics, and the 10 DLC orb relics when `dlc` is on). Every other relic becomes an item. |
+| `ash_filler_amount` | 0-50 [5] | Ash each Ash item gives. 50 Gold is no longer placed as filler, so Ash fills the filler slots. If this is 0 and `traps` is off, filler still falls back to Ash items. |
+| `traps` | on / off | Split the filler slots between Ash and trap items. |
 | `death_link` | on / off | Send and receive DeathLinks. |
 
 The seven standard skills are Inferno, Bomb, Missile, Chakram, Frost Wall, Furious Charge and Cloak and Dagger. The ten tablet skills are always items.
+
+`starting_relics` replaces the old "always free" relics with items, so the number of items grows while the number of locations stays the same. The extra room comes from dropping 50 Gold, which is why filler is now Ash (and traps if enabled). The lowest setting (10) puts the most relics into the multiworld.
 
 Options that older versions had and that no longer exist (`relic_orb_checks`, and the `random_assortment_late_blitz` heat mode) were removed in 1.2.0. A YAML that still sets them generates with a warning for the unknown option, or fails for the removed heat mode name, so delete or rename them.
 
@@ -171,6 +176,8 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 - **Ash from an item:** your Ash total updates (you can see it when buying), but the Ash number in the top-left HUD does not until the game refreshes it.
 - **Seeds that ran before this change:** a seed that had already received items before the unlock baseline existed keeps reporting every unlocked Ember Tree node and weapon mod. A new seed records what is already unlocked on its first connect (for example the five Ember Tree nodes a fresh save starts with) and never reports those as checks.
 - **Starting skills:** gated standard skills in the Nexus shop and the in-run skill selector are untested.
+- **Starting relics:** the first relic select was checked in a real run and only offered starting relics. Relics sold in shops other than the first one rely on the same unlock check, but were not looked at in play.
+- **First shop:** the change that rolls the two scripted relic slots normally is new and was not yet checked in a real run. If Bone Plate or Tainted Conduit still show up in your first shop, please send `BepInEx/LogOutput.log`.
 - **Boss Ambush Trap:** the miniboss it spawns can stay on screen after you kill it. Leaving the room should clear it.
 - Co-op and online multiplayer are not tested.
 - Boss Rush and Daily Dungeon are not covered.

@@ -2038,3 +2038,124 @@ public class DlcSessionStateTests
         Assert.Equal(new[] { 99, 100, 108 }, back.BaselineDlcWeaponMods.ToArray());
     }
 }
+public class StartingRelicTests
+{
+    private static readonly CatalogData Catalog = GameCatalog.Data;
+
+    private static bool IsKnown(int id) =>
+        Catalog.IsDefaultRelic(id) || Catalog.IsOrbRelic(id) || Catalog.IsDlcOrbRelic(id);
+
+    [Fact]
+    public void TheCatalogHoldsTheFortyThreeDefaultRelicsAndNoOrbRelicIsOneOfThem()
+    {
+        Assert.Equal(43, Catalog.DefaultRelics.Count);
+        Assert.Equal(43, Catalog.DefaultRelics.Select(relic => relic.DefId).Distinct().Count());
+        Assert.All(Catalog.DefaultRelics, relic =>
+        {
+            Assert.True(Catalog.IsDefaultRelic(relic.DefId), relic.Name);
+            Assert.False(Catalog.IsOrbRelic(relic.DefId), relic.Name);
+            Assert.False(Catalog.IsDlcOrbRelic(relic.DefId), relic.Name);
+        });
+        // Chronograph is an orb relic, not a default relic.
+        Assert.False(Catalog.IsDefaultRelic(40));
+        Assert.True(Catalog.IsDefaultRelic(17));
+    }
+
+    [Fact]
+    public void DefaultRelicItemIdsFollowTheSharedSchemeAndMoveNothing()
+    {
+        Assert.Equal(Catalog.IdBase + 600, Catalog.DefaultRelicItemId(0));
+        Assert.Equal(Catalog.IdBase + 642, Catalog.DefaultRelicItemId(42));
+        Assert.Equal("Volatile Grimlock", Catalog.DefaultRelicForItem(Catalog.IdBase + 600)!.Name);
+        Assert.Equal(43, Enumerable.Range(0, 43).Count(i => Catalog.DefaultRelicForItem(Catalog.DefaultRelicItemId(i)) is not null));
+        Assert.Null(Catalog.DefaultRelicForItem(Catalog.IdBase + 599));
+        Assert.Null(Catalog.DefaultRelicForItem(Catalog.IdBase + 643));
+        // The orb relic and DLC relic item ranges still resolve where they always did.
+        Assert.Equal(48, Catalog.RelicForItem(Catalog.IdBase + 300)!.DefId);
+        Assert.Equal(211, Catalog.DlcRelicForItem(Catalog.IdBase + 540)!.DefId);
+        Assert.Null(Catalog.RelicForItem(Catalog.IdBase + 600));
+        Assert.Equal("Bone Plate", Catalog.GetItemName(Catalog.DefaultRelicItemId(1)));
+    }
+
+    [Fact]
+    public void ASeedWithoutTheKeyLeavesEveryDefaultRelicUnlockedAsInTheBaseGame()
+    {
+        Assert.Null(StartingRelicPolicy.ReadStartingRelics(null, IsKnown));
+        Assert.Null(StartingRelicPolicy.ReadStartingRelics("17", IsKnown));
+        Assert.False(StartingRelicPolicy.IsGated(isDefaultRelic: true, starting: null));
+    }
+
+    [Fact]
+    public void APresentKeyEvenAnEmptyOneTurnsGatingOn()
+    {
+        var empty = StartingRelicPolicy.ReadStartingRelics(new List<object>(), IsKnown);
+        Assert.NotNull(empty);
+        Assert.True(StartingRelicPolicy.IsGated(isDefaultRelic: true, starting: empty));
+        // Orb relics are managed by their own rule, not by this one.
+        Assert.False(StartingRelicPolicy.IsGated(isDefaultRelic: false, starting: empty));
+    }
+
+    [Fact]
+    public void UnknownAndNonNumericIdsAreIgnored()
+    {
+        var starting = StartingRelicPolicy.ReadStartingRelics(new List<object> { 17L, 40L, 9999L, "oops", 211L }, IsKnown)!;
+        Assert.Equal(new[] { 17, 40, 211 }, starting.OrderBy(id => id).ToArray());
+    }
+
+    [Fact]
+    public void AStartingRelicIsUnlockedAndTheOthersWaitForTheMultiworld()
+    {
+        var starting = new HashSet<int> { 17, 40 };
+        var received = new HashSet<int> { 58 };
+        Assert.True(StartingRelicPolicy.IsUnlocked(17, starting, received));
+        Assert.True(StartingRelicPolicy.IsUnlocked(40, starting, received));
+        Assert.True(StartingRelicPolicy.IsUnlocked(58, starting, received));
+        Assert.False(StartingRelicPolicy.IsUnlocked(6, starting, received));
+        Assert.False(StartingRelicPolicy.IsUnlocked(48, starting, received));
+    }
+
+    [Fact]
+    public void AnUngatedSeedReportsNothingAsStartingAndNothingIsOwnedUntilReceived()
+    {
+        Assert.False(StartingRelicPolicy.IsUnlocked(17, null, new HashSet<int>()));
+        Assert.True(StartingRelicPolicy.IsUnlocked(17, null, new HashSet<int> { 17 }));
+    }
+}
+public class FirstShopPolicyTests
+{
+    private const int Apple = 1;
+    private const int Relic = 7;
+    private const int Potion = 16;
+    private const int ApplePie = 26;
+
+    [Fact]
+    public void AForcedRelicSlotIsCleared()
+    {
+        // Bone Plate (17) and Tainted Conduit (83) in the scripted first shop.
+        Assert.True(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: true, dropType: Relic));
+    }
+
+    [Fact]
+    public void TheForcedFreeApplePieIsKept()
+    {
+        // Slot 0 of the scripted shop is a free Apple Pie, a tutorial gift.
+        Assert.False(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: true, dropType: ApplePie));
+        Assert.False(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: true, dropType: Apple));
+        Assert.False(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: true, dropType: Potion));
+    }
+
+    [Fact]
+    public void OrdinaryEntriesAreNeverTouched()
+    {
+        // The normal shops have no forced items, so a relic entry without overrides is left exactly as it is.
+        Assert.False(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: false, dropType: Relic));
+        Assert.False(FirstShopPolicy.ShouldClearOverride(hasFtueOverrides: false, dropType: ApplePie));
+    }
+
+    [Fact]
+    public void TheRelicDropTypeMatchesTheGamesEnum()
+    {
+        // eDropType.Relic = 7 in the decompiled game code.
+        Assert.Equal(7, FirstShopPolicy.RelicDropType);
+    }
+}

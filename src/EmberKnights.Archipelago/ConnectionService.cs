@@ -18,6 +18,8 @@ public sealed class ConnectionService
     private readonly HashSet<int> startingWeapons = new() { 1 };
     /// <summary>Standard skills this seed starts with, or null when the seed does not gate standard skills.</summary>
     private HashSet<int>? startingStandardSkills;
+    /// <summary>Relics this seed starts with, or null when the seed does not gate the 43 default relics.</summary>
+    private HashSet<int>? startingRelics;
     private readonly HashSet<int> ownedWeapons = new() { 1 };
     private readonly HashSet<int> ownedRelics = new();
     private readonly List<int> receivedRelicOrder = new();
@@ -167,6 +169,7 @@ public sealed class ConnectionService
         startingWeapons.Clear();
         startingWeapons.Add(1);
         startingStandardSkills = null;
+        startingRelics = null;
         DlcActive = false;
         ownedWeapons.Clear();
         ownedWeapons.Add(1);
@@ -185,6 +188,7 @@ public sealed class ConnectionService
         ReceivedItemCount = 0;
         DeathLinkEnabled = false;
         GameActions.RestoreVanillaEmberTreeCosts();
+        GameActions.RestoreVanillaFirstShop();
         CoinIconPatcher.Restore();
         StatusText = "Disconnected";
         LastMessage = "AP mode disabled; vanilla unlock behavior restored.";
@@ -277,9 +281,13 @@ public sealed class ConnectionService
         GameCatalog.Data.Weapons.Select(weapon => weapon.WeaponId)
             .Concat(DlcActive ? GameCatalog.Data.Dlc.Weapons.Select(weapon => weapon.WeaponId) : Enumerable.Empty<int>());
 
-    public bool OwnsRelic(int relicDefId) => ownedRelics.Contains(relicDefId);
+    public bool OwnsRelic(int relicDefId) =>
+        StartingRelicPolicy.IsUnlocked(relicDefId, startingRelics, ownedRelics);
 
-    /// <summary>Only the 53 base orb relics are controlled by the multiworld; all other relics stay vanilla.</summary>
+    /// <summary>
+    /// The 53 base orb relics are always controlled by the multiworld, and so are the 43 default relics when the seed
+    /// gates them (starting_relic_ids is in the slot data). Every other relic stays vanilla.
+    /// </summary>
     public bool ResolveRelicUnlocked(int relicDefId, bool vanillaResult)
     {
         if (!IsActive || !IsManagedRelic(relicDefId))
@@ -294,9 +302,14 @@ public sealed class ConnectionService
     public bool ShouldSuppressRelicGrant(int relicDefId) =>
         IsActive && IsManagedRelic(relicDefId);
 
-    /// <summary>A base orb relic is managed whenever the plugin is active; a DLC orb relic only with the DLC on.</summary>
-    public bool IsManagedRelic(int relicDefId) => DlcPolicy.IsManagedRelic(
-        GameCatalog.Data.IsOrbRelic(relicDefId), GameCatalog.Data.IsDlcOrbRelic(relicDefId), DlcActive);
+    /// <summary>
+    /// A base orb relic is managed whenever the plugin is active; a DLC orb relic only with the DLC on; a default relic
+    /// only when the seed gates them.
+    /// </summary>
+    public bool IsManagedRelic(int relicDefId) =>
+        DlcPolicy.IsManagedRelic(
+            GameCatalog.Data.IsOrbRelic(relicDefId), GameCatalog.Data.IsDlcOrbRelic(relicDefId), DlcActive) ||
+        StartingRelicPolicy.IsGated(GameCatalog.Data.IsDefaultRelic(relicDefId), startingRelics);
 
     /// <summary>
     /// Picks what Esper's reveal shows for the orbs being handed in (see <see cref="RelicOrbPolicy.ChooseReveals"/>)
@@ -367,7 +380,14 @@ public sealed class ConnectionService
         if (GameCatalog.Data.LocationForRelicOrb(order) is not { } locationId ||
             !scoutedItems.TryGetValue(locationId, out var item))
             return null;
-        var relicDefId = item.IsOwnPlayer && GameCatalog.Data.RelicForItem(item.ItemId) is { } relic ? relic.DefId : (int?)null;
+        int? relicDefId = null;
+        if (item.IsOwnPlayer)
+        {
+            if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic)
+                relicDefId = relic.DefId;
+            else if (GameCatalog.Data.DefaultRelicForItem(item.ItemId) is { } defaultRelic)
+                relicDefId = defaultRelic.DefId;
+        }
         return new ScoutedOrb
         {
             Order = order,
@@ -841,6 +861,11 @@ public sealed class ConnectionService
             success.SlotData.TryGetValue("starting_standard_skill_ids", out var startingSkillsRaw);
             startingStandardSkills = StandardSkillPolicy.ReadStartingSkills(
                 startingSkillsRaw, id => GameCatalog.Data.StandardSkillForAbility(id) is not null);
+            success.SlotData.TryGetValue("starting_relic_ids", out var startingRelicsRaw);
+            startingRelics = StartingRelicPolicy.ReadStartingRelics(
+                startingRelicsRaw,
+                id => GameCatalog.Data.IsDefaultRelic(id) || GameCatalog.Data.IsOrbRelic(id) ||
+                      GameCatalog.Data.IsDlcOrbRelic(id));
             loggedIn = true;
             IsActive = true;
             StatusText = $"Connected - {slotName} @ {currentSession.RoomState.Seed}";
@@ -926,6 +951,9 @@ public sealed class ConnectionService
                     ownedWeapons.Add(weapon.WeaponId);
                 if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic && ownedRelics.Add(relic.DefId))
                     receivedRelicOrder.Add(relic.DefId);
+                if (GameCatalog.Data.DefaultRelicForItem(item.ItemId) is { } defaultRelic &&
+                    ownedRelics.Add(defaultRelic.DefId))
+                    receivedRelicOrder.Add(defaultRelic.DefId);
                 // DLC items are only ever sent by a seed that has the DLC on, but they are recorded only then, so a stray
                 // DLC item in a DLC-off seed can never unlock anything.
                 if (DlcActive)
@@ -993,6 +1021,12 @@ public sealed class ConnectionService
         if (GameCatalog.Data.RelicForItem(item.ItemId) is { } relic)
         {
             LastMessage = $"Received relic: {relic.Name}";
+            ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
+            return true;
+        }
+        if (GameCatalog.Data.DefaultRelicForItem(item.ItemId) is { } defaultRelic)
+        {
+            LastMessage = $"Received relic: {defaultRelic.Name}";
             ArchipelagoPlugin.LogSource.LogInfo(LastMessage);
             return true;
         }

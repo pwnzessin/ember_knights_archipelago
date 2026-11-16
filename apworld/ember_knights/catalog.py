@@ -97,6 +97,14 @@ class RelicOrb:
 
 
 @dataclass(frozen=True)
+class DefaultRelic:
+    """An ordinary relic the game unlocks for every new save. It has no orb and no location; it is only an item."""
+
+    def_id: int
+    name: str
+
+
+@dataclass(frozen=True)
 class HeatModifier:
     """One difficulty modifier from the game's heat screen."""
 
@@ -146,6 +154,7 @@ class Catalog:
             RoomMilestone(entry["world"], entry["areaName"], entry["room"]) for entry in raw["roomMilestones"]
         ]
         self.relic_orbs = [RelicOrb(entry["order"], entry["defId"], entry["name"]) for entry in raw["relicOrbs"]]
+        self.default_relics = [DefaultRelic(entry["defId"], entry["name"]) for entry in raw["defaultRelics"]]
         dlc = raw["dlc"]
         self.dlc_regions: list[str] = list(dlc["regions"])
         self.dlc_skills = [
@@ -205,6 +214,8 @@ class Catalog:
             self.item_name_to_id[orb.name] = self.relic_item_id(index)
             self.location_name_to_id[orb.location_name] = self.relic_orb_location_id(index)
         self.item_name_to_id[self.heat_reduction_item_name] = self.heat_reduction_item_id()
+        for index, relic in enumerate(self.default_relics):
+            self.item_name_to_id[relic.name] = self.default_relic_item_id(index)
         for index, skill in enumerate(self.dlc_skills):
             self.item_name_to_id[skill.name] = self.dlc_skill_item_id(index)
             self.location_name_to_id[skill.location_name] = self.dlc_skill_location_id(index)
@@ -261,6 +272,10 @@ class Catalog:
 
     def heat_reduction_item_id(self) -> int:
         return self.id_base + 400
+
+    def default_relic_item_id(self, index: int) -> int:
+        # Offset 600 sits above the DLC relics (+540..+549) and below every location range (+1000..), so no ID moves.
+        return self.id_base + 600 + index
 
     # ---- DLC (Wrath of the Architect). Items live at +500.., locations at +8000.., which no base range uses.
     def dlc_skill_item_id(self, index: int) -> int:

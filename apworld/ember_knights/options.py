@@ -149,12 +149,30 @@ class StartingStandardSkills(Range):
     default = 3
 
 
+class StartingRelics(Range):
+    """How many relics you start with, chosen at random from one big pool of relics.
+
+    In the base game 43 relics are unlocked for every new save (Bone Plate, Meteor, Discount Card, Magic Tome and
+    others), and the other 53 come from relic orbs. This option puts all of them into one pool of 96 (106 with the
+    DLC). You start with this many, picked at random for your seed. Every other relic stops being free and becomes an
+    item found in the multiworld; the orbs still send their checks, and what Esper shows still matches the multiworld.
+
+    The minimum is 10 so a run always has some relics to find in its first relic select. Set to 43 to start with as
+    many relics as the base game gives you for free (though not necessarily the same ones).
+    """
+
+    display_name = "Starting Relics"
+    range_start = 10
+    range_end = 43
+    default = 10
+
+
 class AshFillerAmount(Range):
     """How much Ash (the weapon-mod and ability-upgrade resource) each Ash item gives.
 
-    Ash items take a share of the filler slots next to 50 Gold. The game only accepts as much Ash as is still
-    needed for unbought weapon mods and ability upgrades, so an Ash item can give less than this once most of
-    them are bought. Set to 0 to remove Ash items from the pool.
+    Ash items fill the filler slots (50 Gold is no longer placed), sharing them with traps when those are on. The
+    game only accepts as much Ash as is still needed for unbought weapon mods and ability upgrades, so an Ash item
+    can give less than this once most of them are bought. Set to 0 and the filler items still exist, but give no Ash.
     """
 
     display_name = "Ash Filler Amount"
@@ -190,6 +208,7 @@ class EmberKnightsOptions(PerGameCommonOptions):
     starting_archipelago_coins: StartingArchipelagoCoins
     extra_starting_weapons: ExtraStartingWeapons
     starting_standard_skills: StartingStandardSkills
+    starting_relics: StartingRelics
     ash_filler_amount: AshFillerAmount
     traps: Traps
     death_link: DeathLink

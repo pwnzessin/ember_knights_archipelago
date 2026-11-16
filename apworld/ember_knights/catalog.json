@@ -63,101 +63,441 @@
     }
   ],
   "standardSkills": [
-    { "name": "Inferno", "abilityId": 1 },
-    { "name": "Bomb", "abilityId": 2 },
-    { "name": "Missile", "abilityId": 3 },
-    { "name": "Chakram", "abilityId": 4 },
-    { "name": "Frost Wall", "abilityId": 6 },
-    { "name": "Furious Charge", "abilityId": 8 },
-    { "name": "Cloak and Dagger", "abilityId": 36 }
+    {
+      "name": "Inferno",
+      "abilityId": 1
+    },
+    {
+      "name": "Bomb",
+      "abilityId": 2
+    },
+    {
+      "name": "Missile",
+      "abilityId": 3
+    },
+    {
+      "name": "Chakram",
+      "abilityId": 4
+    },
+    {
+      "name": "Frost Wall",
+      "abilityId": 6
+    },
+    {
+      "name": "Furious Charge",
+      "abilityId": 8
+    },
+    {
+      "name": "Cloak and Dagger",
+      "abilityId": 36
+    }
   ],
   "dlc": {
-    "regions": ["Mystic Forest", "Inferno Bastille", "Feudal Village", "Utopic Labs", "Architect Level"],
+    "regions": [
+      "Mystic Forest",
+      "Inferno Bastille",
+      "Feudal Village",
+      "Utopic Labs",
+      "Architect Level"
+    ],
     "minibosses": [
-      { "name": "Geode", "enemyIds": [146], "region": "Mystic Forest", "variant": false },
-      { "name": "Fire Dancer", "enemyIds": [121], "region": "Inferno Bastille", "variant": false },
-      { "name": "Daimyo Ghost", "enemyIds": [148], "region": "Feudal Village", "variant": false },
-      { "name": "Fly Hatcher", "enemyIds": [147], "region": "Utopic Labs", "variant": false }
+      {
+        "name": "Geode",
+        "enemyIds": [
+          146
+        ],
+        "region": "Mystic Forest",
+        "variant": false
+      },
+      {
+        "name": "Fire Dancer",
+        "enemyIds": [
+          121
+        ],
+        "region": "Inferno Bastille",
+        "variant": false
+      },
+      {
+        "name": "Daimyo Ghost",
+        "enemyIds": [
+          148
+        ],
+        "region": "Feudal Village",
+        "variant": false
+      },
+      {
+        "name": "Fly Hatcher",
+        "enemyIds": [
+          147
+        ],
+        "region": "Utopic Labs",
+        "variant": false
+      }
     ],
     "bosses": [
-      { "name": "Oukranos", "enemyIds": [128], "region": "Mystic Forest", "variant": false },
-      { "name": "Lady Inferna", "enemyIds": [120], "region": "Inferno Bastille", "variant": false },
-      { "name": "The Kasumi Clan", "enemyIds": [129], "region": "Feudal Village", "variant": false },
-      { "name": "Terrorbyte", "enemyIds": [130], "region": "Utopic Labs", "variant": false },
-      { "name": "The Architect", "enemyIds": [149], "region": "Architect Level", "variant": false },
-      { "name": "The Architect Reborn", "enemyIds": [161], "region": "Architect Level", "variant": true }
+      {
+        "name": "Oukranos",
+        "enemyIds": [
+          128
+        ],
+        "region": "Mystic Forest",
+        "variant": false
+      },
+      {
+        "name": "Lady Inferna",
+        "enemyIds": [
+          120
+        ],
+        "region": "Inferno Bastille",
+        "variant": false
+      },
+      {
+        "name": "The Kasumi Clan",
+        "enemyIds": [
+          129
+        ],
+        "region": "Feudal Village",
+        "variant": false
+      },
+      {
+        "name": "Terrorbyte",
+        "enemyIds": [
+          130
+        ],
+        "region": "Utopic Labs",
+        "variant": false
+      },
+      {
+        "name": "The Architect",
+        "enemyIds": [
+          149
+        ],
+        "region": "Architect Level",
+        "variant": false
+      },
+      {
+        "name": "The Architect Reborn",
+        "enemyIds": [
+          161
+        ],
+        "region": "Architect Level",
+        "variant": true
+      }
     ],
     "skills": [
-      { "name": "Summon Geode", "abilityId": 42, "locationName": "Mystic Forest Miniboss Skill Tablet", "region": "Mystic Forest" },
-      { "name": "Grasping Vines", "abilityId": 43, "locationName": "Mystic Forest Boss Skill Tablet", "region": "Mystic Forest" },
-      { "name": "Hydra", "abilityId": 44, "locationName": "Inferno Bastille Miniboss Skill Tablet", "region": "Inferno Bastille" },
-      { "name": "Molten Boulder", "abilityId": 45, "locationName": "Inferno Bastille Boss Skill Tablet", "region": "Inferno Bastille" },
-      { "name": "Ronin Reflex", "abilityId": 46, "locationName": "Feudal Village Miniboss Skill Tablet", "region": "Feudal Village" },
-      { "name": "Daimyo Dash", "abilityId": 47, "locationName": "Feudal Village Boss Skill Tablet", "region": "Feudal Village" },
-      { "name": "Stormpike", "abilityId": 48, "locationName": "Utopic Labs Miniboss Skill Tablet", "region": "Utopic Labs" },
-      { "name": "Guided Assault", "abilityId": 53, "locationName": "Utopic Labs Boss Skill Tablet", "region": "Utopic Labs" },
-      { "name": "Architect Fists", "abilityId": 55, "locationName": "Architect Level Fists Skill Tablet", "region": "Architect Level" },
-      { "name": "Astral Beam", "abilityId": 56, "locationName": "Architect Level Astral Skill Tablet", "region": "Architect Level" }
+      {
+        "name": "Summon Geode",
+        "abilityId": 42,
+        "locationName": "Mystic Forest Miniboss Skill Tablet",
+        "region": "Mystic Forest"
+      },
+      {
+        "name": "Grasping Vines",
+        "abilityId": 43,
+        "locationName": "Mystic Forest Boss Skill Tablet",
+        "region": "Mystic Forest"
+      },
+      {
+        "name": "Hydra",
+        "abilityId": 44,
+        "locationName": "Inferno Bastille Miniboss Skill Tablet",
+        "region": "Inferno Bastille"
+      },
+      {
+        "name": "Molten Boulder",
+        "abilityId": 45,
+        "locationName": "Inferno Bastille Boss Skill Tablet",
+        "region": "Inferno Bastille"
+      },
+      {
+        "name": "Ronin Reflex",
+        "abilityId": 46,
+        "locationName": "Feudal Village Miniboss Skill Tablet",
+        "region": "Feudal Village"
+      },
+      {
+        "name": "Daimyo Dash",
+        "abilityId": 47,
+        "locationName": "Feudal Village Boss Skill Tablet",
+        "region": "Feudal Village"
+      },
+      {
+        "name": "Stormpike",
+        "abilityId": 48,
+        "locationName": "Utopic Labs Miniboss Skill Tablet",
+        "region": "Utopic Labs"
+      },
+      {
+        "name": "Guided Assault",
+        "abilityId": 53,
+        "locationName": "Utopic Labs Boss Skill Tablet",
+        "region": "Utopic Labs"
+      },
+      {
+        "name": "Architect Fists",
+        "abilityId": 55,
+        "locationName": "Architect Level Fists Skill Tablet",
+        "region": "Architect Level"
+      },
+      {
+        "name": "Astral Beam",
+        "abilityId": 56,
+        "locationName": "Architect Level Astral Skill Tablet",
+        "region": "Architect Level"
+      }
     ],
     "weapons": [
-      { "name": "Hyper Gloves", "weaponId": 8 },
-      { "name": "Ember Buster", "weaponId": 9 }
+      {
+        "name": "Hyper Gloves",
+        "weaponId": 8
+      },
+      {
+        "name": "Ember Buster",
+        "weaponId": 9
+      }
     ],
     "weaponMods": [
-      { "name": "Hyper Gloves 1-1", "defId": 98, "weaponType": 8 },
-      { "name": "Hyper Gloves 1-2", "defId": 99, "weaponType": 8 },
-      { "name": "Hyper Gloves 1-3", "defId": 100, "weaponType": 8 },
-      { "name": "Hyper Gloves 2-1", "defId": 101, "weaponType": 8 },
-      { "name": "Hyper Gloves 2-2", "defId": 102, "weaponType": 8 },
-      { "name": "Hyper Gloves 2-3", "defId": 103, "weaponType": 8 },
-      { "name": "Hyper Gloves 3-1", "defId": 104, "weaponType": 8 },
-      { "name": "Hyper Gloves 3-2", "defId": 105, "weaponType": 8 },
-      { "name": "Hyper Gloves 3-3", "defId": 106, "weaponType": 8 },
-      { "name": "Hyper Gloves Ultimate", "defId": 107, "weaponType": 8 },
-      { "name": "Ember Buster 1-2", "defId": 109, "weaponType": 9 },
-      { "name": "Ember Buster 1-3", "defId": 110, "weaponType": 9 },
-      { "name": "Ember Buster 2-1", "defId": 111, "weaponType": 9 },
-      { "name": "Ember Buster 2-2", "defId": 112, "weaponType": 9 },
-      { "name": "Ember Buster 2-3", "defId": 113, "weaponType": 9 },
-      { "name": "Ember Buster 3-1", "defId": 114, "weaponType": 9 },
-      { "name": "Ember Buster 3-2", "defId": 115, "weaponType": 9 },
-      { "name": "Ember Buster 3-3", "defId": 116, "weaponType": 9 },
-      { "name": "Ember Buster Ultimate", "defId": 117, "weaponType": 9 }
+      {
+        "name": "Hyper Gloves 1-1",
+        "defId": 98,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 1-2",
+        "defId": 99,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 1-3",
+        "defId": 100,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 2-1",
+        "defId": 101,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 2-2",
+        "defId": 102,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 2-3",
+        "defId": 103,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 3-1",
+        "defId": 104,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 3-2",
+        "defId": 105,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves 3-3",
+        "defId": 106,
+        "weaponType": 8
+      },
+      {
+        "name": "Hyper Gloves Ultimate",
+        "defId": 107,
+        "weaponType": 8
+      },
+      {
+        "name": "Ember Buster 1-2",
+        "defId": 109,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 1-3",
+        "defId": 110,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 2-1",
+        "defId": 111,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 2-2",
+        "defId": 112,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 2-3",
+        "defId": 113,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 3-1",
+        "defId": 114,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 3-2",
+        "defId": 115,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster 3-3",
+        "defId": 116,
+        "weaponType": 9
+      },
+      {
+        "name": "Ember Buster Ultimate",
+        "defId": 117,
+        "weaponType": 9
+      }
     ],
     "roomMilestones": [
-      { "world": "Mystic Forest", "areaName": 8, "room": 1 },
-      { "world": "Mystic Forest", "areaName": 8, "room": 3 },
-      { "world": "Mystic Forest", "areaName": 8, "room": 5 },
-      { "world": "Mystic Forest", "areaName": 8, "room": 7 },
-      { "world": "Inferno Bastille", "areaName": 9, "room": 1 },
-      { "world": "Inferno Bastille", "areaName": 9, "room": 3 },
-      { "world": "Inferno Bastille", "areaName": 9, "room": 5 },
-      { "world": "Inferno Bastille", "areaName": 9, "room": 7 },
-      { "world": "Feudal Village", "areaName": 10, "room": 1 },
-      { "world": "Feudal Village", "areaName": 10, "room": 3 },
-      { "world": "Feudal Village", "areaName": 10, "room": 5 },
-      { "world": "Feudal Village", "areaName": 10, "room": 7 },
-      { "world": "Utopic Labs", "areaName": 11, "room": 1 },
-      { "world": "Utopic Labs", "areaName": 11, "room": 3 },
-      { "world": "Utopic Labs", "areaName": 11, "room": 5 },
-      { "world": "Utopic Labs", "areaName": 11, "room": 7 },
-      { "world": "Architect Level", "areaName": 14, "room": 1 },
-      { "world": "Architect Level", "areaName": 14, "room": 3 }
+      {
+        "world": "Mystic Forest",
+        "areaName": 8,
+        "room": 1
+      },
+      {
+        "world": "Mystic Forest",
+        "areaName": 8,
+        "room": 3
+      },
+      {
+        "world": "Mystic Forest",
+        "areaName": 8,
+        "room": 5
+      },
+      {
+        "world": "Mystic Forest",
+        "areaName": 8,
+        "room": 7
+      },
+      {
+        "world": "Inferno Bastille",
+        "areaName": 9,
+        "room": 1
+      },
+      {
+        "world": "Inferno Bastille",
+        "areaName": 9,
+        "room": 3
+      },
+      {
+        "world": "Inferno Bastille",
+        "areaName": 9,
+        "room": 5
+      },
+      {
+        "world": "Inferno Bastille",
+        "areaName": 9,
+        "room": 7
+      },
+      {
+        "world": "Feudal Village",
+        "areaName": 10,
+        "room": 1
+      },
+      {
+        "world": "Feudal Village",
+        "areaName": 10,
+        "room": 3
+      },
+      {
+        "world": "Feudal Village",
+        "areaName": 10,
+        "room": 5
+      },
+      {
+        "world": "Feudal Village",
+        "areaName": 10,
+        "room": 7
+      },
+      {
+        "world": "Utopic Labs",
+        "areaName": 11,
+        "room": 1
+      },
+      {
+        "world": "Utopic Labs",
+        "areaName": 11,
+        "room": 3
+      },
+      {
+        "world": "Utopic Labs",
+        "areaName": 11,
+        "room": 5
+      },
+      {
+        "world": "Utopic Labs",
+        "areaName": 11,
+        "room": 7
+      },
+      {
+        "world": "Architect Level",
+        "areaName": 14,
+        "room": 1
+      },
+      {
+        "world": "Architect Level",
+        "areaName": 14,
+        "room": 3
+      }
     ],
     "relicOrbs": [
-      { "order": 1, "defId": 211, "name": "Lingering Presence" },
-      { "order": 2, "defId": 212, "name": "Vengeful Spirit" },
-      { "order": 3, "defId": 213, "name": "Last Gasp" },
-      { "order": 4, "defId": 214, "name": "Necronomicon" },
-      { "order": 5, "defId": 215, "name": "Soul Locket" },
-      { "order": 6, "defId": 216, "name": "Lionheart Cres" },
-      { "order": 7, "defId": 217, "name": "Void Amulet" },
-      { "order": 8, "defId": 218, "name": "Vampiric Sigil" },
-      { "order": 9, "defId": 219, "name": "Goliath Wargear" },
-      { "order": 10, "defId": 220, "name": "Midas Mail" }
+      {
+        "order": 1,
+        "defId": 211,
+        "name": "Lingering Presence"
+      },
+      {
+        "order": 2,
+        "defId": 212,
+        "name": "Vengeful Spirit"
+      },
+      {
+        "order": 3,
+        "defId": 213,
+        "name": "Last Gasp"
+      },
+      {
+        "order": 4,
+        "defId": 214,
+        "name": "Necronomicon"
+      },
+      {
+        "order": 5,
+        "defId": 215,
+        "name": "Soul Locket"
+      },
+      {
+        "order": 6,
+        "defId": 216,
+        "name": "Lionheart Cres"
+      },
+      {
+        "order": 7,
+        "defId": 217,
+        "name": "Void Amulet"
+      },
+      {
+        "order": 8,
+        "defId": 218,
+        "name": "Vampiric Sigil"
+      },
+      {
+        "order": 9,
+        "defId": 219,
+        "name": "Goliath Wargear"
+      },
+      {
+        "order": 10,
+        "defId": 220,
+        "name": "Midas Mail"
+      }
     ]
   },
-
   "fillers": [
     {
       "name": "1 Archipelago Coin",
@@ -1620,6 +1960,180 @@
     {
       "name": "Void Mantle",
       "weaponId": 7
+    }
+  ],
+  "defaultRelics": [
+    {
+      "defId": 6,
+      "name": "Volatile Grimlock"
+    },
+    {
+      "defId": 17,
+      "name": "Bone Plate"
+    },
+    {
+      "defId": 22,
+      "name": "Rejuvenation Glove"
+    },
+    {
+      "defId": 24,
+      "name": "Ripe Elderberry"
+    },
+    {
+      "defId": 44,
+      "name": "Discount Card"
+    },
+    {
+      "defId": 58,
+      "name": "Meteor"
+    },
+    {
+      "defId": 62,
+      "name": "Empowered Bangle"
+    },
+    {
+      "defId": 75,
+      "name": "Decayed Scepter"
+    },
+    {
+      "defId": 78,
+      "name": "Overcharge Gauntlet"
+    },
+    {
+      "defId": 79,
+      "name": "Surge Pendant"
+    },
+    {
+      "defId": 89,
+      "name": "Giant Mace"
+    },
+    {
+      "defId": 100,
+      "name": "Sharp Necklace"
+    },
+    {
+      "defId": 101,
+      "name": "Daze Claw"
+    },
+    {
+      "defId": 103,
+      "name": "Ornate Glove"
+    },
+    {
+      "defId": 104,
+      "name": "Plague Bomb"
+    },
+    {
+      "defId": 105,
+      "name": "Toxic Bangle"
+    },
+    {
+      "defId": 110,
+      "name": "Combustion Stone"
+    },
+    {
+      "defId": 115,
+      "name": "Glacier Necklace"
+    },
+    {
+      "defId": 117,
+      "name": "Brittle Scepter"
+    },
+    {
+      "defId": 119,
+      "name": "Volt Claw"
+    },
+    {
+      "defId": 120,
+      "name": "Plasma Ball"
+    },
+    {
+      "defId": 122,
+      "name": "Conduit Spike"
+    },
+    {
+      "defId": 123,
+      "name": "Overloading Necklace"
+    },
+    {
+      "defId": 125,
+      "name": "Twisted Firestarter"
+    },
+    {
+      "defId": 129,
+      "name": "Razor Bangle"
+    },
+    {
+      "defId": 130,
+      "name": "Supreme Ambition"
+    },
+    {
+      "defId": 133,
+      "name": "Spite Shield"
+    },
+    {
+      "defId": 135,
+      "name": "Fiery Imbuement"
+    },
+    {
+      "defId": 139,
+      "name": "Arctic Axe"
+    },
+    {
+      "defId": 140,
+      "name": "Guard Scepter"
+    },
+    {
+      "defId": 150,
+      "name": "Impact Charm"
+    },
+    {
+      "defId": 151,
+      "name": "Clobbering Mace"
+    },
+    {
+      "defId": 156,
+      "name": "Magic Tome"
+    },
+    {
+      "defId": 161,
+      "name": "Steward's Gift"
+    },
+    {
+      "defId": 163,
+      "name": "Pyroguard"
+    },
+    {
+      "defId": 170,
+      "name": "Confined Fury"
+    },
+    {
+      "defId": 172,
+      "name": "Warlock's Grip"
+    },
+    {
+      "defId": 174,
+      "name": "Frost Pact"
+    },
+    {
+      "defId": 175,
+      "name": "Charged Trinket"
+    },
+    {
+      "defId": 177,
+      "name": "Pristine Band"
+    },
+    {
+      "defId": 178,
+      "name": "Flawless Brace"
+    },
+    {
+      "defId": 179,
+      "name": "Absolute Ambition"
+    },
+    {
+      "defId": 182,
+      "name": "Recovery Ring"
     }
   ]
 }

@@ -145,6 +145,28 @@ internal static class NewRelicMarkerGuardPatch
     }
 }
 
+[HarmonyPatch(typeof(GameCode.GameUtils), nameof(GameCode.GameUtils.GenerateShopItems))]
+internal static class FirstShopPatch
+{
+    // The first shop of a new save is scripted: it forces Bone Plate and Tainted Conduit whatever the player owns.
+    // Before any shop stock is generated, turn those forced relic slots into ordinary ones so the slot is rolled from
+    // the normal shop pool, which only offers relics the player has unlocked. Doing it here, right before the stock is
+    // built, means it holds however the shop room was reached and does not depend on a timer.
+    [HarmonyPrefix]
+    private static void Prefix()
+    {
+        try
+        {
+            if (ArchipelagoPlugin.Instance.Service.IsActive)
+                GameActions.ApplyFirstShopRandomization();
+        }
+        catch (Exception exception)
+        {
+            PatchSafety.Report("GenerateShopItems", exception);
+        }
+    }
+}
+
 [HarmonyPatch(typeof(GameCode.GameUtils), nameof(GameCode.GameUtils.StartEsperIdentifyRelicsSequence))]
 internal static class EsperTurnInPatch
 {
