@@ -11,7 +11,7 @@ public sealed class ArchipelagoPlugin : BasePlugin
 {
     public const string PluginGuid = "com.emberknights.archipelago";
     public const string PluginName = "Ember Knights Archipelago";
-    public const string PluginVersion = "1.5.0";
+    public const string PluginVersion = "1.6.0";
 
     public static ArchipelagoPlugin Instance { get; private set; } = null!;
     public static ManualLogSource LogSource => Instance.Log;
@@ -28,8 +28,10 @@ public sealed class ArchipelagoPlugin : BasePlugin
     public ConfigEntry<string> HeatMode { get; private set; } = null!;
     public ConfigEntry<string> HeatReroll { get; private set; } = null!;
     public ConfigEntry<bool> RelicDiagnosticsEnabled { get; private set; } = null!;
+    public ConfigEntry<bool> FillShortRelicSelectorsEnabled { get; private set; } = null!;
     public ConfigEntry<bool> PraxisDiagnosticsEnabled { get; private set; } = null!;
     public ConfigEntry<bool> CoinIconEnabled { get; private set; } = null!;
+    public ConfigEntry<bool> TitleScreenLabelEnabled { get; private set; } = null!;
     public ConfigEntry<bool> HudLogWindowEnabled { get; private set; } = null!;
     public ConfigEntry<float> HudLogScale { get; private set; } = null!;
     public ConfigEntry<float> HudLogHoldSeconds { get; private set; } = null!;
@@ -71,11 +73,24 @@ public sealed class ArchipelagoPlugin : BasePlugin
             "relic_diagnostics",
             true,
             "Log how relic orb pickups and Esper's identification turn-in change the save's relic lists ([RelicDiag] lines in LogOutput.log).");
+        FillShortRelicSelectorsEnabled = Config.Bind(
+            "Gameplay",
+            "fill_short_relic_selectors",
+            true,
+            "When a relic selector (the 'pick one of three' screen) comes out with fewer than three cards because you own few relics, " +
+            "add random relics you own that passed every one of the game's own checks until it has three. A selector the game " +
+            "already filled is never touched. Only affects seeds where the multiworld gives out your relics.");
         CoinIconEnabled = Config.Bind(
             "Visuals",
             "archipelago_coin_icon",
             true,
             "Replace the Ember icon with the Archipelago coin while connected. The original icon returns on disconnect.");
+        TitleScreenLabelEnabled = Config.Bind(
+            "Visuals",
+            "title_screen_label",
+            true,
+            "Show a small line on the title screen saying the Archipelago mod is loaded and whether it is connected. " +
+            "It shows your slot name but never the server address. Drawn locally on your screen only.");
         HudLogWindowEnabled = Config.Bind(
             "Visuals",
             "hud_log_window",

@@ -74,7 +74,7 @@ class EmberKnightsWorld(World):
         super().__init__(multiworld, player)
         self.starting_weapon_ids: list[int] = [1]
         self.dlc_enabled = False
-        self.starting_standard_skill_ids: list[int] = []
+        self.starting_skill_ids: list[int] = []
         self.starting_relic_ids: list[int] = []
 
     def relic_pool(self) -> list[tuple[int, str]]:
@@ -86,6 +86,32 @@ class EmberKnightsWorld(World):
             pool.update({orb.def_id: orb.name for orb in CATALOG.dlc_relic_orbs})
         return sorted(pool.items())
 
+    # How many starting relics are guaranteed to be a Common relic with no category requirement (the relics a relic selector
+    # can always offer). With the minimum start of 10 this is most of the start, which is the point: the first selectors then
+    # rotate through several relics instead of repeating the same few.
+    GUARANTEED_STARTER_FRIENDLY_RELICS = 7
+
+    def pick_starting_relics(self, pool: list[tuple[int, str]], count: int) -> list[tuple[int, str]]:
+        """Chooses the starting relics: first GUARANTEED_STARTER_FRIENDLY_RELICS (or `count` if smaller) at random from the
+        Common relics without a category requirement, then the rest at random from everything still left. The result has
+        exactly `count` distinct relics from `pool`. Draws only from this world's own random source, so a seed always
+        rolls the same way."""
+        friendly = [entry for entry in pool if entry[0] in CATALOG.starter_friendly_relics]
+        guaranteed = min(self.GUARANTEED_STARTER_FRIENDLY_RELICS, count, len(friendly))
+        first = self.random.sample(friendly, guaranteed)
+        taken = {def_id for def_id, _ in first}
+        rest = [entry for entry in pool if entry[0] not in taken]
+        return first + self.random.sample(rest, count - guaranteed)
+
+    def skill_pool(self) -> list[tuple[int, str]]:
+        """Every skill this seed can hold as an item: the 7 standard skills the game unlocks for free, the 10 tablet skills
+        and, with the DLC, the 10 DLC tablet skills. Ordered by ability id so the same seed always rolls the same way."""
+        pool = {skill.ability_id: skill.name for skill in CATALOG.standard_skills}
+        pool.update({skill.ability_id: skill.name for skill in CATALOG.skills})
+        if self.dlc_enabled:
+            pool.update({skill.ability_id: skill.name for skill in CATALOG.dlc_skills})
+        return sorted(pool.items())
+
     def generate_early(self) -> None:
         self.dlc_enabled = bool(self.options.dlc)
         extra_count = max(0, min(len(CATALOG.weapons), int(self.options.extra_starting_weapons)))
@@ -94,17 +120,21 @@ class EmberKnightsWorld(World):
         for weapon in chosen:
             self.multiworld.push_precollected(self.create_item(weapon.name))
 
-        # Pick which standard skills this seed starts with. The others become items in the pool.
-        skill_count = max(3, min(len(CATALOG.standard_skills), int(self.options.starting_standard_skills)))
-        chosen_skills = self.random.sample(CATALOG.standard_skills, skill_count)
-        self.starting_standard_skill_ids = sorted(skill.ability_id for skill in chosen_skills)
-        for skill in chosen_skills:
-            self.multiworld.push_precollected(self.create_item(skill.name))
+        # Pick which skills this seed starts with, out of the one big pool. The others become items in the pool.
+        skills = self.skill_pool()
+        skill_count = max(3, min(len(skills), int(self.options.starting_skills)))
+        chosen_skills = self.random.sample(skills, skill_count)
+        self.starting_skill_ids = sorted(ability_id for ability_id, _ in chosen_skills)
+        for _, name in chosen_skills:
+            self.multiworld.push_precollected(self.create_item(name))
 
-        # Pick which relics this seed starts with, out of the one big pool. The others become items in the pool.
+        # Pick which relics this seed starts with, out of the one big pool. The others become items in the pool. A relic
+        # selector rolls each card's rarity (about 84% Common) and only offers relics the player may have, so a start of mostly
+        # Epic relics, or relics that need a category the player does not hold yet, repeats the same few. Guarantee a number
+        # of Common relics with no category requirement among the starting relics; the rest of the start stays random.
         pool = self.relic_pool()
         relic_count = max(10, min(43, int(self.options.starting_relics)))
-        chosen_relics = self.random.sample(pool, relic_count)
+        chosen_relics = self.pick_starting_relics(pool, relic_count)
         self.starting_relic_ids = sorted(def_id for def_id, _ in chosen_relics)
         for _, name in chosen_relics:
             self.multiworld.push_precollected(self.create_item(name))
@@ -292,10 +322,9 @@ class EmberKnightsWorld(World):
         self.set_completion_rule(Has("Victory"))
 
     def create_items(self) -> None:
-        permanent_items = [skill.name for skill in CATALOG.skills]
-        permanent_items.extend(
-            skill.name for skill in CATALOG.standard_skills if skill.ability_id not in self.starting_standard_skill_ids
-        )
+        # Every skill in the big pool that is not a starting skill is an item. The tablet skills keep their locations (the
+        # tablets are checks whatever you started with); the standard skills have none, so they only add items.
+        permanent_items = [name for ability_id, name in self.skill_pool() if ability_id not in self.starting_skill_ids]
         permanent_items.extend(
             weapon.name for weapon in CATALOG.weapons if weapon.weapon_id not in self.starting_weapon_ids
         )
@@ -303,7 +332,6 @@ class EmberKnightsWorld(World):
         # ("Relic Orb NN"); the 43 default relics have none, so they only add items.
         permanent_items.extend(name for def_id, name in self.relic_pool() if def_id not in self.starting_relic_ids)
         if self.dlc_enabled:
-            permanent_items.extend(skill.name for skill in CATALOG.dlc_skills)
             permanent_items.extend(weapon.name for weapon in CATALOG.dlc_weapons)
         permanent_items.extend(CATALOG.heat_reduction_item_name for _ in range(self.heat_reduction_item_count()))
         permanent_items.extend(self.coin_bundle_names())
@@ -359,18 +387,22 @@ class EmberKnightsWorld(World):
             "heat_reduction_per_item",
             "starting_archipelago_coins",
             "extra_starting_weapons",
-            "starting_standard_skills",
+            "starting_skills",
             "starting_relics",
             "ash_filler_amount",
             "traps",
+            "trap_enemies_any_world",
         )
         slot_data["starting_weapon_ids"] = list(self.starting_weapon_ids)
         # Presence of "dlc" tells the client this seed includes the DLC checks and items. Seeds from before this key
         # existed lack it, and the client then treats the DLC as off, exactly as it always did.
         slot_data["dlc"] = bool(self.dlc_enabled)
-        # Presence of this key tells the client the standard skills are gated by this seed. Seeds generated before
-        # the option existed lack it, and the client then keeps every standard skill unlocked as in the base game.
-        slot_data["starting_standard_skill_ids"] = list(self.starting_standard_skill_ids)
+        # Presence of this key tells the client the skills are gated by this seed: the standard skills stop being free,
+        # the tablets stop granting their skill, and only these starting skills (plus whatever the multiworld sends) are
+        # unlocked. Seeds generated before the option existed carry starting_standard_skill_ids instead (standard skills
+        # only, tablets always items); the client still understands that key, and a seed with neither leaves every
+        # standard skill unlocked as in the base game.
+        slot_data["starting_skill_ids"] = list(self.starting_skill_ids)
         # Presence of this key tells the client the relics are gated by this seed: the default relics stop being free
         # and only these ones (plus whatever the multiworld sends) are unlocked. Seeds generated before the option
         # existed lack it, and the client then leaves every default relic unlocked as in the base game.
@@ -385,5 +417,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.5.0"
+        slot_data["mod_version"] = "1.6.0"
         return slot_data

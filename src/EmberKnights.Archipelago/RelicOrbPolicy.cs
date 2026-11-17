@@ -56,18 +56,34 @@ internal static class RelicOrbPolicy
 }
 
 /// <summary>
-/// Which of the seven base-game standard skills a seed gates behind Archipelago items, and which it starts with.
-/// Pure logic with no game dependencies.
+/// Which skills a seed starts with when it uses the starting_skills option. All skills (the 7 standard skills, the 10 tablet
+/// skills and, with the DLC, the 10 DLC tablet skills) form one pool; the seed starts with a random few of them and the rest
+/// only arrive from the multiworld. Seeds from before the option carry <c>starting_standard_skill_ids</c> instead, which only
+/// ever gated the standard skills (the tablet skills were always items), and a seed with neither key leaves the standard
+/// skills unlocked as in the base game. Pure logic with no game dependencies.
 /// </summary>
-internal static class StandardSkillPolicy
+internal static class StartingSkillPolicy
 {
     /// <summary>
-    /// Reads <c>starting_standard_skill_ids</c> from slot data. Returns null when the seed does not carry the key
-    /// (generated before the option existed): such seeds keep every standard skill unlocked, as in the base game,
-    /// so an old save is never locked out of skills it already had. A present key, even an empty one, turns gating on.
-    /// Ids that are not standard skills are ignored.
+    /// What the seed says about skills. <see cref="Starting"/> is the set of skills the player starts with. When
+    /// <see cref="GatesTablets"/> is true the tablet skills are gated too (the new option); otherwise only the standard
+    /// skills are, and only when <see cref="Starting"/> is not null (the old option); null means nothing is gated.
     /// </summary>
-    public static HashSet<int>? ReadStartingSkills(object? raw, Func<int, bool> isStandardSkill)
+    public sealed record Mode(HashSet<int>? Starting, bool GatesTablets);
+
+    /// <summary>
+    /// Reads the slot data. The new key wins when present. A key that is present, even an empty list, turns gating on.
+    /// A value that is not a list is treated as absent. Ids that are not skills of this game are ignored.
+    /// </summary>
+    public static Mode Read(object? newKey, object? oldKey, Func<int, bool> isSkill, Func<int, bool> isStandard)
+    {
+        var fromNew = ReadIds(newKey, isSkill);
+        if (fromNew is not null)
+            return new Mode(fromNew, GatesTablets: true);
+        return new Mode(ReadIds(oldKey, isStandard), GatesTablets: false);
+    }
+
+    private static HashSet<int>? ReadIds(object? raw, Func<int, bool> isKnown)
     {
         if (raw is null || raw is string || raw is not System.Collections.IEnumerable enumerable)
             return null;
@@ -77,7 +93,7 @@ internal static class StandardSkillPolicy
             try
             {
                 var id = Convert.ToInt32(element);
-                if (isStandardSkill(id))
+                if (isKnown(id))
                     result.Add(id);
             }
             catch (Exception)
@@ -89,11 +105,30 @@ internal static class StandardSkillPolicy
     }
 
     /// <summary>
-    /// True when the player may use this standard skill: always when the seed does not gate them
-    /// (<paramref name="starting"/> is null), otherwise when it is a starting skill or has been received.
+    /// Whether the plugin decides this skill's unlock state. A tablet skill is always decided by the multiworld; a standard
+    /// skill only when the seed gates standard skills at all; a DLC skill only when the DLC is on.
     /// </summary>
-    public static bool IsUnlocked(int abilityId, HashSet<int>? starting, IReadOnlySet<int> received) =>
-        starting is null || starting.Contains(abilityId) || received.Contains(abilityId);
+    public static bool IsControlled(bool isTablet, bool isStandard, bool isDlcSkill, bool dlcActive, Mode mode) =>
+        isTablet || (isDlcSkill && dlcActive) || (isStandard && mode.Starting is not null);
+
+    /// <summary>
+    /// Whether the player owns a controlled skill: a starting skill, or one the multiworld has delivered. A starting skill
+    /// only counts for the kinds the seed gates, so an old seed's starting list (standard skills only) never unlocks a
+    /// tablet skill, which still needs its own item.
+    /// </summary>
+    public static bool IsUnlocked(int abilityId, bool isTablet, bool isStandard, Mode mode, IReadOnlySet<int> received)
+    {
+        if (received.Contains(abilityId))
+            return true;
+        // A seed that does not gate standard skills leaves them free, exactly as the base game does.
+        if (isStandard && mode.Starting is null)
+            return true;
+        if (mode.Starting is null || !mode.Starting.Contains(abilityId))
+            return false;
+        // A start list only unlocks the kinds the seed gates. The old format lists standard skills only, so it never
+        // unlocks a tablet skill; the new format lists any skill.
+        return isStandard || mode.GatesTablets;
+    }
 }
 
 /// <summary>
@@ -161,6 +196,74 @@ internal static class FirstShopPolicy
     /// </summary>
     public static bool ShouldClearOverride(bool hasFtueOverrides, int dropType) =>
         hasFtueOverrides && dropType == RelicDropType;
+}
+
+/// <summary>
+/// The relic selector ("pick one of three") rolls each card's rarity from a table that is about 84% Common, then picks a
+/// relic of that rarity the player may be offered. A player who owns few relics, as with a seed that starts with a handful
+/// drawn from the whole pool, can run out of Commons and see one or two cards. This tops a short selector back up to three
+/// from relics the player owns that every eligibility check has already allowed. Pure logic with no game dependencies.
+/// </summary>
+internal static class SelectorTopUpPolicy
+{
+    /// <summary>How many cards a relic selector shows. Observed in play; the screen's own slot count lives in a prefab.</summary>
+    public const int TargetCards = 3;
+
+    /// <summary>
+    /// Picks which relics to add to a selector that came out short. Candidates are relics the player owns that passed every
+    /// check, in the order given; a relic already on offer is never added twice, and the result never exceeds the number of
+    /// missing cards. Returns nothing when the selector is already full, so a normal roll is left exactly as the game made it.
+    /// </summary>
+    public static List<int> ChooseAdditions(
+        IReadOnlyCollection<int> alreadyOffered,
+        IEnumerable<int> candidates,
+        Func<int, int> nextBelow,
+        int target = TargetCards)
+    {
+        var additions = new List<int>();
+        var missing = target - alreadyOffered.Count;
+        if (missing <= 0)
+            return additions;
+
+        var pool = candidates.Where(id => !alreadyOffered.Contains(id)).Distinct().ToList();
+        while (additions.Count < missing && pool.Count > 0)
+        {
+            var index = nextBelow(pool.Count);
+            additions.Add(pool[index]);
+            pool.RemoveAt(index);
+        }
+        return additions;
+    }
+
+    /// <summary>
+    /// Whether a relic may be added to a short selector: the player owns it and the game ran every check on it and none said
+    /// no. A relic the game stopped asking about was removed by an earlier check the log does not show, so it is not allowed.
+    /// </summary>
+    public static bool IsAllowed(bool owned, bool maxOwnedOk, bool unlockedOk, bool weaponOk, bool categoryAskedAndFailed) =>
+        owned && maxOwnedOk && unlockedOk && weaponOk && !categoryAskedAndFailed;
+
+    /// <summary>
+    /// What the game answered, per check, for one relic during one selector. A check that was never asked is null: the game
+    /// stops asking about a relic once an earlier check removed it, so "never asked" for a later check means "already out".
+    /// </summary>
+    public sealed record Verdicts(bool? MaxOwned, bool? Unlocked, bool? Weapon, bool? Category);
+
+    /// <summary>
+    /// True when every check the game ran on the relic passed and it ran all the way to the last one (the weapon check).
+    /// A relic the game never finished checking was removed by something earlier, however the checks that did run answered.
+    /// </summary>
+    public static bool PassedEverything(Verdicts v) =>
+        v.MaxOwned == true && v.Unlocked == true && v.Weapon == true && v.Category != false;
+
+    /// <summary>
+    /// Every owned relic that passed everything and is not already on offer, in id order so the same inputs give the same list.
+    /// </summary>
+    public static List<int> Candidates(IReadOnlyDictionary<int, Verdicts> byRelic, Func<int, bool> owned, IReadOnlyCollection<int> alreadyOffered) =>
+        byRelic
+            .Where(entry => owned(entry.Key) && PassedEverything(entry.Value) && !alreadyOffered.Contains(entry.Key))
+            .Select(entry => entry.Key)
+            .OrderBy(id => id)
+            .ToList();
 }
 
 /// <summary>What the multiworld holds at one "Relic Orb N" location, from a silent scout.</summary>

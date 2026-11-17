@@ -977,7 +977,6 @@ public class UpgradeTooltipTests
 public class StandardSkillTests
 {
     private static readonly CatalogData Catalog = GameCatalog.Data;
-    private static bool IsStandard(int id) => Catalog.StandardSkillForAbility(id) is not null;
 
     [Fact]
     public void TheSevenBaseGameDefaultSkillsAreTheStandardSkills()
@@ -1016,52 +1015,6 @@ public class StandardSkillTests
     {
         foreach (var tablet in Catalog.Skills)
             Assert.Null(Catalog.StandardSkillForAbility(tablet.AbilityId));
-    }
-
-    [Fact]
-    public void ASeedWithoutTheKeyDoesNotGateStandardSkills()
-    {
-        // Seeds generated before the option existed: every standard skill stays unlocked so old saves lose nothing.
-        Assert.Null(StandardSkillPolicy.ReadStartingSkills(null, IsStandard));
-        Assert.True(StandardSkillPolicy.IsUnlocked(1, null, new HashSet<int>()));
-        Assert.True(StandardSkillPolicy.IsUnlocked(36, null, new HashSet<int>()));
-    }
-
-    [Fact]
-    public void ASeedWithTheKeyGatesStandardSkillsEvenWhenTheListIsEmpty()
-    {
-        var starting = StandardSkillPolicy.ReadStartingSkills(new List<object> { 1L, 3L, 8L }, IsStandard);
-        Assert.NotNull(starting);
-        Assert.Equal(new[] { 1, 3, 8 }, starting!.OrderBy(id => id).ToArray());
-        Assert.NotNull(StandardSkillPolicy.ReadStartingSkills(new List<object>(), IsStandard));
-    }
-
-    [Fact]
-    public void StartingSkillsAreUnlockedAndTheRestOnlyOnceReceived()
-    {
-        var starting = new HashSet<int> { 1, 3, 8 };
-        var received = new HashSet<int>();
-        Assert.True(StandardSkillPolicy.IsUnlocked(1, starting, received));
-        Assert.False(StandardSkillPolicy.IsUnlocked(2, starting, received));
-        Assert.False(StandardSkillPolicy.IsUnlocked(36, starting, received));
-        received.Add(2);
-        Assert.True(StandardSkillPolicy.IsUnlocked(2, starting, received));
-        Assert.False(StandardSkillPolicy.IsUnlocked(36, starting, received));
-    }
-
-    [Fact]
-    public void SlotDataIdsThatAreNotStandardSkillsOrNotNumbersAreIgnored()
-    {
-        // 30 is Cyclone (a tablet skill), 999 does not exist, "x" and null are junk.
-        var starting = StandardSkillPolicy.ReadStartingSkills(new List<object?> { 2L, 30L, 999L, "x", null, 4 }, IsStandard);
-        Assert.Equal(new[] { 2, 4 }, starting!.OrderBy(id => id).ToArray());
-    }
-
-    [Fact]
-    public void AStringOrNonListValueIsTreatedAsMissing()
-    {
-        Assert.Null(StandardSkillPolicy.ReadStartingSkills("1,2,3", IsStandard));
-        Assert.Null(StandardSkillPolicy.ReadStartingSkills(5L, IsStandard));
     }
 }
 
@@ -2157,5 +2110,594 @@ public class FirstShopPolicyTests
     {
         // eDropType.Relic = 7 in the decompiled game code.
         Assert.Equal(7, FirstShopPolicy.RelicDropType);
+    }
+}
+public class TrapSpawnPolicyTests
+{
+    [Fact]
+    public void ASingleEnemyStandsExactlyWhereTheTrapWouldHavePutIt()
+    {
+        var offsets = TrapSpawnPolicy.GridOffsets(1);
+        Assert.Single(offsets);
+        Assert.Equal((0f, 0f), offsets[0]);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(25)]
+    [InlineData(26)]
+    public void EveryEnemyGetsItsOwnCell(int count)
+    {
+        var offsets = TrapSpawnPolicy.GridOffsets(count);
+        Assert.Equal(count, offsets.Length);
+        Assert.Equal(count, offsets.Distinct().Count());
+    }
+
+    [Fact]
+    public void NoTwoEnemiesAreCloserThanOneGridStep()
+    {
+        var offsets = TrapSpawnPolicy.GridOffsets(20);
+        for (var a = 0; a < offsets.Length; a++)
+        {
+            for (var b = a + 1; b < offsets.Length; b++)
+            {
+                var dx = offsets[a].X - offsets[b].X;
+                var dy = offsets[a].Y - offsets[b].Y;
+                Assert.True(Math.Sqrt(dx * dx + dy * dy) >= TrapSpawnPolicy.GridSpacing - 0.001f, $"{a} and {b} overlap");
+            }
+        }
+    }
+
+    [Fact]
+    public void TheGridFillsOutwardFromTheMiddleNearestFirst()
+    {
+        var offsets = TrapSpawnPolicy.GridOffsets(9);
+        var distances = offsets.Select(o => o.X * o.X + o.Y * o.Y).ToArray();
+        Assert.Equal(distances.OrderBy(d => d).ToArray(), distances);
+        // Nine enemies make a full 3 by 3 block, so nothing is further than one step on either axis.
+        Assert.All(offsets, o =>
+        {
+            Assert.True(Math.Abs(o.X) <= TrapSpawnPolicy.GridSpacing + 0.001f);
+            Assert.True(Math.Abs(o.Y) <= TrapSpawnPolicy.GridSpacing + 0.001f);
+        });
+    }
+
+    [Fact]
+    public void TheLayoutIsTheSameEveryTime()
+    {
+        Assert.Equal(TrapSpawnPolicy.GridOffsets(12), TrapSpawnPolicy.GridOffsets(12));
+    }
+
+    [Fact]
+    public void ACustomSpacingScalesTheGrid()
+    {
+        var offsets = TrapSpawnPolicy.GridOffsets(2, spacing: 10f);
+        Assert.Equal(10f, Math.Max(Math.Abs(offsets[1].X), Math.Abs(offsets[1].Y)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    public void NothingToPlaceGivesAnEmptyLayout(int count)
+    {
+        Assert.Empty(TrapSpawnPolicy.GridOffsets(count));
+    }
+
+    [Theory]
+    [InlineData(1, false, true)]
+    [InlineData(2, false, true)]
+    [InlineData(3, false, true)]
+    [InlineData(4, false, true)]
+    [InlineData(5, false, true)]
+    [InlineData(8, false, false)]
+    [InlineData(9, false, false)]
+    [InlineData(10, false, false)]
+    [InlineData(11, false, false)]
+    [InlineData(14, false, false)]
+    [InlineData(8, true, true)]
+    [InlineData(9, true, true)]
+    [InlineData(10, true, true)]
+    [InlineData(11, true, true)]
+    [InlineData(14, true, true)]
+    [InlineData(6, true, false)]
+    [InlineData(7, true, false)]
+    [InlineData(12, true, false)]
+    [InlineData(13, true, false)]
+    [InlineData(0, true, false)]
+    public void OnlyRunWorldsAreEligibleAndTheDlcWorldsNeedTheDlc(int area, bool dlc, bool expected)
+    {
+        Assert.Equal(expected, TrapSpawnPolicy.IsEligibleWorld(area, dlc));
+    }
+
+    private static bool Eligible(
+        bool enabled = true, bool dlcContent = false, int area = 1, bool boss = false, bool mini = false,
+        bool baseRank = true, bool stationary = false, bool clone = false, int max = -1, bool dlc = false) =>
+        TrapSpawnPolicy.IsEligibleEnemy(enabled, dlcContent, area, boss, mini, baseRank, stationary, clone, max, dlc);
+
+    [Fact]
+    public void AnOrdinaryBaseEnemyIsEligible()
+    {
+        Assert.True(Eligible());
+        Assert.True(Eligible(area: 5));
+    }
+
+    [Fact]
+    public void BossesMinibossesVariantsHatcheriesAndClonesAreNeverDrawn()
+    {
+        Assert.False(Eligible(boss: true));
+        Assert.False(Eligible(mini: true));
+        Assert.False(Eligible(baseRank: false));
+        Assert.False(Eligible(stationary: true));
+        Assert.False(Eligible(clone: true));
+        Assert.False(Eligible(enabled: false));
+        Assert.False(Eligible(max: 0));
+    }
+
+    [Fact]
+    public void ADlcEnemyIsOnlyDrawnWhenTheSeedUsesTheDlc()
+    {
+        Assert.False(Eligible(dlcContent: true, area: 9, dlc: false));
+        Assert.True(Eligible(dlcContent: true, area: 9, dlc: true));
+        // A DLC flag on an enemy whose area is a base world is still held back without the DLC.
+        Assert.False(Eligible(dlcContent: true, area: 1, dlc: false));
+    }
+
+    [Fact]
+    public void ADlcWorldEnemyIsRejectedWithoutTheDlcEvenIfItIsNotFlagged()
+    {
+        Assert.False(Eligible(dlcContent: false, area: 10, dlc: false));
+        Assert.True(Eligible(dlcContent: false, area: 10, dlc: true));
+    }
+
+    [Fact]
+    public void EnemiesOutsideTheRunWorldsAreNeverDrawn()
+    {
+        Assert.False(Eligible(area: 0, dlc: true));
+        Assert.False(Eligible(area: 6, dlc: true));
+        Assert.False(Eligible(area: 12, dlc: true));
+        Assert.False(Eligible(area: 13, dlc: true));
+    }
+
+    [Fact]
+    public void PickingFromAnEmptyPoolGivesNothing()
+    {
+        Assert.Equal(-1, TrapSpawnPolicy.PickIndex(0, _ => 0));
+        Assert.Equal(-1, TrapSpawnPolicy.PickIndex(-2, _ => 0));
+        Assert.Equal(3, TrapSpawnPolicy.PickIndex(10, n => { Assert.Equal(10, n); return 3; }));
+    }
+
+    [Fact]
+    public void ASeedWithoutTheKeyKeepsTrapEnemiesInTheCurrentWorld()
+    {
+        Assert.False(TrapSpawnPolicy.ReadAnyWorld(null));
+        Assert.False(TrapSpawnPolicy.ReadAnyWorld(false));
+        Assert.False(TrapSpawnPolicy.ReadAnyWorld(0L));
+        Assert.False(TrapSpawnPolicy.ReadAnyWorld("false"));
+        Assert.False(TrapSpawnPolicy.ReadAnyWorld(new object()));
+    }
+
+    [Fact]
+    public void TheOptionIsReadFromBoolNumberAndTextForms()
+    {
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld(true));
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld(1L));
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld(1));
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld("true"));
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld("True"));
+        Assert.True(TrapSpawnPolicy.ReadAnyWorld("1"));
+    }
+}
+public class TitleStatusTextTests
+{
+    [Fact]
+    public void ConnectedShowsTheModVersionAndTheSlot()
+    {
+        var line = TitleStatusText.Build("1.5.0", isConnected: true, isActive: true, slotName: "Oreo");
+        Assert.StartsWith("Archipelago Mod 1.5.0", line);
+        Assert.Contains("Connected", line);
+        Assert.Contains("as Oreo", line);
+    }
+
+    [Fact]
+    public void NotConnectedTellsThePlayerHowToConnect()
+    {
+        var line = TitleStatusText.Build("1.5.0", isConnected: false, isActive: false, slotName: "Oreo");
+        Assert.Contains("Not connected", line);
+        Assert.Contains("F6", line);
+        Assert.DoesNotContain("Connected</color>", line);
+    }
+
+    [Fact]
+    public void ADroppedLinkReadsAsReconnectingNotOffline()
+    {
+        var line = TitleStatusText.Build("1.5.0", isConnected: false, isActive: true, slotName: "Oreo");
+        Assert.Contains("Reconnecting", line);
+        Assert.DoesNotContain("Not connected", line);
+    }
+
+    [Fact]
+    public void TheServerAddressNeverAppears()
+    {
+        // The line is built from state and the slot only, so there is no way to pass an address in; this guards the
+        // wording against ever growing one.
+        foreach (var (connected, active) in new[] { (true, true), (false, true), (false, false) })
+        {
+            var line = TitleStatusText.Build("1.5.0", connected, active, "Oreo");
+            Assert.DoesNotContain("archipelago.gg", line);
+            Assert.DoesNotContain("38281", line);
+            Assert.DoesNotContain("@", line);
+        }
+    }
+
+    [Fact]
+    public void AMissingSlotNameStillMakesAReadableLine()
+    {
+        foreach (var slot in new string?[] { null, "", "   " })
+        {
+            var connected = TitleStatusText.Build("1.5.0", true, true, slot);
+            Assert.EndsWith("Connected</color>", connected);
+            var offline = TitleStatusText.Build("1.5.0", false, false, slot);
+            Assert.EndsWith("(F6 to connect)", offline);
+        }
+    }
+
+    [Fact]
+    public void ASlotNameCannotInjectRichTextTags()
+    {
+        var line = TitleStatusText.Build("1.5.0", true, true, "<size=500>Oreo</size><color=red>");
+        // Only the tags the mod wrote itself remain: one colour tag pair around the status word.
+        Assert.Equal(1, CountOccurrences(line, "<color="));
+        Assert.Equal(1, CountOccurrences(line, "</color>"));
+        Assert.DoesNotContain("<size", line);
+    }
+
+    [Fact]
+    public void ALongSlotNameIsShortenedToFitOneLine()
+    {
+        var cleaned = TitleStatusText.CleanSlot(new string('x', 80));
+        Assert.True(cleaned.Length <= 24);
+        Assert.EndsWith("…", cleaned);
+        Assert.Equal("Oreo", TitleStatusText.CleanSlot("  Oreo  "));
+    }
+
+    [Fact]
+    public void TheTextTagsAreAlwaysBalanced()
+    {
+        foreach (var (connected, active) in new[] { (true, true), (false, true), (false, false) })
+        {
+            var line = TitleStatusText.Build("1.5.0", connected, active, "Oreo");
+            Assert.Equal(CountOccurrences(line, "<color="), CountOccurrences(line, "</color>"));
+        }
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+        return count;
+    }
+}
+
+public class SelectorTopUpPolicyTests
+{
+    private static int First(int count) => 0;
+
+    [Fact]
+    public void AFullSelectorIsLeftExactlyAsTheGameMadeIt()
+    {
+        Assert.Empty(SelectorTopUpPolicy.ChooseAdditions(new[] { 1, 2, 3 }, new[] { 4, 5, 6 }, First));
+        Assert.Empty(SelectorTopUpPolicy.ChooseAdditions(new[] { 1, 2, 3, 4 }, new[] { 5 }, First));
+    }
+
+    [Fact]
+    public void AShortSelectorIsFilledUpToThree()
+    {
+        var added = SelectorTopUpPolicy.ChooseAdditions(new[] { 10 }, new[] { 20, 30, 40, 50 }, First);
+        Assert.Equal(2, added.Count);
+        Assert.Equal(new[] { 20, 30 }, added);
+    }
+
+    [Fact]
+    public void ARelicAlreadyOnOfferIsNeverAddedTwice()
+    {
+        var added = SelectorTopUpPolicy.ChooseAdditions(new[] { 10, 20 }, new[] { 10, 20, 30 }, First);
+        Assert.Equal(new[] { 30 }, added);
+    }
+
+    [Fact]
+    public void ADuplicateCandidateIsOnlyUsedOnce()
+    {
+        var added = SelectorTopUpPolicy.ChooseAdditions(new[] { 10 }, new[] { 20, 20, 20, 30 }, First);
+        Assert.Equal(new[] { 20, 30 }, added);
+    }
+
+    [Fact]
+    public void WithTooFewCandidatesItAddsWhatItCanAndNeverInventsOne()
+    {
+        var added = SelectorTopUpPolicy.ChooseAdditions(new[] { 10 }, new[] { 20 }, First);
+        Assert.Equal(new[] { 20 }, added);
+        Assert.Empty(SelectorTopUpPolicy.ChooseAdditions(new[] { 10 }, Array.Empty<int>(), First));
+    }
+
+    [Fact]
+    public void AnEmptySelectorCanBeFilledCompletely()
+    {
+        var added = SelectorTopUpPolicy.ChooseAdditions(Array.Empty<int>(), new[] { 5, 6, 7, 8 }, First);
+        Assert.Equal(3, added.Count);
+    }
+
+    [Fact]
+    public void TheChoiceUsesTheSuppliedRandomSourceAndStaysInRange()
+    {
+        var seen = new List<int>();
+        var added = SelectorTopUpPolicy.ChooseAdditions(new[] { 1 }, new[] { 10, 20, 30, 40 }, count =>
+        {
+            seen.Add(count);
+            return count - 1; // always the last one left
+        });
+        Assert.Equal(new[] { 40, 30 }, added);
+        Assert.Equal(new[] { 4, 3 }, seen);
+    }
+
+    [Fact]
+    public void ARelicTheGameNeverFinishedCheckingIsNotAllowed()
+    {
+        // allowed only when owned, and the max-owned, unlock and weapon checks all said yes, and category did not say no
+        Assert.True(SelectorTopUpPolicy.IsAllowed(true, true, true, true, categoryAskedAndFailed: false));
+        Assert.False(SelectorTopUpPolicy.IsAllowed(false, true, true, true, false));
+        Assert.False(SelectorTopUpPolicy.IsAllowed(true, false, true, true, false));
+        Assert.False(SelectorTopUpPolicy.IsAllowed(true, true, false, true, false));
+        Assert.False(SelectorTopUpPolicy.IsAllowed(true, true, true, false, false));
+        Assert.False(SelectorTopUpPolicy.IsAllowed(true, true, true, true, categoryAskedAndFailed: true));
+    }
+
+    [Fact]
+    public void TheTargetIsThree()
+    {
+        Assert.Equal(3, SelectorTopUpPolicy.TargetCards);
+    }
+}
+public class SelectorTopUpCandidateTests
+{
+    private static SelectorTopUpPolicy.Verdicts Full => new(true, true, true, null);
+    private static SelectorTopUpPolicy.Verdicts WithCategory(bool ok) => new(true, true, true, ok);
+
+    [Fact]
+    public void ARelicThatPassedEveryCheckIsACandidate()
+    {
+        Assert.True(SelectorTopUpPolicy.PassedEverything(Full));
+        // Category is only asked about relics that have a requirement; passing it is fine.
+        Assert.True(SelectorTopUpPolicy.PassedEverything(WithCategory(true)));
+    }
+
+    [Fact]
+    public void ARelicTheGameRejectedIsNeverACandidate()
+    {
+        Assert.False(SelectorTopUpPolicy.PassedEverything(WithCategory(false)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(false, true, true, null)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(true, false, true, null)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(true, true, false, null)));
+    }
+
+    [Fact]
+    public void ARelicTheGameStoppedAskingAboutIsNeverACandidate()
+    {
+        // Seen in play: relics whose required category was not met were asked max-owned and unlock, never the weapon check.
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(true, true, null, null)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(true, true, null, false)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(true, null, null, null)));
+        Assert.False(SelectorTopUpPolicy.PassedEverything(new(null, null, null, null)));
+    }
+
+    [Fact]
+    public void CandidatesAreOwnedPassedAndNotAlreadyOfferedInIdOrder()
+    {
+        // Mirrors the run that showed 3 cards from 9 passing relics: 75, 103 and 179 offered.
+        var byRelic = new Dictionary<int, SelectorTopUpPolicy.Verdicts>
+        {
+            [179] = Full, [62] = Full, [75] = Full, [103] = Full, [114] = WithCategory(true), [132] = Full,
+            [102] = new(true, true, null, false),      // rejected on category
+            [110] = new(true, true, null, null),       // stopped early
+            [154] = new(true, null, null, null),       // stopped very early
+        };
+        var owned = new HashSet<int> { 62, 75, 102, 103, 110, 114, 132, 154, 179 };
+        var candidates = SelectorTopUpPolicy.Candidates(byRelic, owned.Contains, new[] { 75, 103, 179 });
+        Assert.Equal(new[] { 62, 114, 132 }, candidates);
+    }
+
+    [Fact]
+    public void ARelicThePlayerDoesNotOwnIsNeverACandidateWhateverTheChecksSaid()
+    {
+        var byRelic = new Dictionary<int, SelectorTopUpPolicy.Verdicts> { [5] = Full, [6] = Full };
+        var candidates = SelectorTopUpPolicy.Candidates(byRelic, id => id == 6, Array.Empty<int>());
+        Assert.Equal(new[] { 6 }, candidates);
+    }
+
+    [Fact]
+    public void NoCandidatesMeansNothingIsAdded()
+    {
+        var byRelic = new Dictionary<int, SelectorTopUpPolicy.Verdicts> { [1] = new(true, true, null, false) };
+        var candidates = SelectorTopUpPolicy.Candidates(byRelic, _ => true, new[] { 7 });
+        Assert.Empty(candidates);
+        Assert.Empty(SelectorTopUpPolicy.ChooseAdditions(new[] { 7 }, candidates, _ => 0));
+    }
+
+    [Fact]
+    public void ShortRunCIsFilledFromWhatPassed()
+    {
+        // The two-card selector from the logs: 122 and 125 offered, 123 was the other relic that passed everything.
+        var byRelic = new Dictionary<int, SelectorTopUpPolicy.Verdicts>
+        {
+            [122] = Full, [123] = Full, [125] = Full,
+            [59] = new(true, true, null, null), [127] = new(true, true, null, null), [158] = new(true, true, null, null),
+        };
+        var offered = new[] { 122, 125 };
+        var candidates = SelectorTopUpPolicy.Candidates(byRelic, _ => true, offered);
+        var added = SelectorTopUpPolicy.ChooseAdditions(offered, candidates, _ => 0);
+        Assert.Equal(new[] { 123 }, added);
+    }
+
+    [Fact]
+    public void AFullSelectorGetsNothingEvenWithPlentyOfCandidates()
+    {
+        var byRelic = Enumerable.Range(1, 20).ToDictionary(i => i, _ => Full);
+        var offered = new[] { 1, 2, 3 };
+        var candidates = SelectorTopUpPolicy.Candidates(byRelic, _ => true, offered);
+        Assert.NotEmpty(candidates);
+        Assert.Empty(SelectorTopUpPolicy.ChooseAdditions(offered, candidates, _ => 0));
+    }
+}
+public class StartingSkillPolicyTests
+{
+    private static readonly CatalogData Catalog = GameCatalog.Data;
+    private static bool IsSkill(int id) =>
+        Catalog.SkillForAbility(id) is not null || Catalog.StandardSkillForAbility(id) is not null ||
+        Catalog.DlcSkillForAbility(id) is not null;
+    private static bool IsStandard(int id) => Catalog.StandardSkillForAbility(id) is not null;
+
+    private static StartingSkillPolicy.Mode Read(object? newKey, object? oldKey = null) =>
+        StartingSkillPolicy.Read(newKey, oldKey, IsSkill, IsStandard);
+
+    private static readonly IReadOnlySet<int> None = new HashSet<int>();
+
+    // 1 Inferno and 36 Cloak and Dagger are standard; 30 Cyclone and 11 Rupture are tablets; 42 Summon Geode is a DLC tablet.
+
+    [Fact]
+    public void TheCatalogMatchesTheSkillKindsTheseTestsAssume()
+    {
+        Assert.NotNull(Catalog.StandardSkillForAbility(1));
+        Assert.NotNull(Catalog.StandardSkillForAbility(36));
+        Assert.NotNull(Catalog.SkillForAbility(30));
+        Assert.NotNull(Catalog.SkillForAbility(11));
+        Assert.NotNull(Catalog.DlcSkillForAbility(42));
+        Assert.Equal(7, Catalog.StandardSkills.Count);
+        Assert.Equal(10, Catalog.Skills.Count);
+        Assert.Equal(10, Catalog.Dlc.Skills.Count);
+    }
+
+    [Fact]
+    public void ASeedWithNeitherKeyGatesNothingAndLeavesStandardSkillsFree()
+    {
+        var mode = Read(null, null);
+        Assert.Null(mode.Starting);
+        Assert.False(mode.GatesTablets);
+        Assert.True(StartingSkillPolicy.IsUnlocked(1, isTablet: false, isStandard: true, mode, None));
+        Assert.False(StartingSkillPolicy.IsControlled(false, true, false, false, mode));
+    }
+
+    [Fact]
+    public void TheNewKeyGatesEverySkillIncludingTablets()
+    {
+        var mode = Read(new List<object> { 1L, 30L });
+        Assert.True(mode.GatesTablets);
+        Assert.Equal(new[] { 1, 30 }, mode.Starting!.OrderBy(i => i).ToArray());
+        // A starting standard skill and a starting tablet skill are both unlocked.
+        Assert.True(StartingSkillPolicy.IsUnlocked(1, false, true, mode, None));
+        Assert.True(StartingSkillPolicy.IsUnlocked(30, true, false, mode, None));
+        // Everything else waits for the multiworld, standard skills included.
+        Assert.False(StartingSkillPolicy.IsUnlocked(36, false, true, mode, None));
+        Assert.False(StartingSkillPolicy.IsUnlocked(11, true, false, mode, None));
+        Assert.True(StartingSkillPolicy.IsControlled(true, false, false, false, mode));
+        Assert.True(StartingSkillPolicy.IsControlled(false, true, false, false, mode));
+    }
+
+    [Fact]
+    public void AReceivedSkillIsUnlockedWhateverTheStartList()
+    {
+        var mode = Read(new List<object> { 1L });
+        var received = new HashSet<int> { 11, 36 };
+        Assert.True(StartingSkillPolicy.IsUnlocked(11, true, false, mode, received));
+        Assert.True(StartingSkillPolicy.IsUnlocked(36, false, true, mode, received));
+        Assert.False(StartingSkillPolicy.IsUnlocked(30, true, false, mode, received));
+    }
+
+    [Fact]
+    public void AnEmptyNewKeyStillTurnsGatingOn()
+    {
+        var mode = Read(new List<object>());
+        Assert.NotNull(mode.Starting);
+        Assert.True(mode.GatesTablets);
+        Assert.False(StartingSkillPolicy.IsUnlocked(1, false, true, mode, None));
+    }
+
+    [Fact]
+    public void AnOldSeedGatesOnlyTheStandardSkillsAndTabletsStayItemsOnly()
+    {
+        // Seeds from before the option carry only starting_standard_skill_ids.
+        var mode = Read(null, new List<object> { 1L, 2L, 3L });
+        Assert.False(mode.GatesTablets);
+        Assert.Equal(new[] { 1, 2, 3 }, mode.Starting!.OrderBy(i => i).ToArray());
+        Assert.True(StartingSkillPolicy.IsUnlocked(1, false, true, mode, None));
+        Assert.False(StartingSkillPolicy.IsUnlocked(36, false, true, mode, None));
+        // A tablet skill is controlled by the multiworld in an old seed too, and the start list never unlocks it.
+        Assert.True(StartingSkillPolicy.IsControlled(true, false, false, false, mode));
+        Assert.False(StartingSkillPolicy.IsUnlocked(30, true, false, mode, None));
+        Assert.True(StartingSkillPolicy.IsUnlocked(30, true, false, mode, new HashSet<int> { 30 }));
+    }
+
+    [Fact]
+    public void AnOldSeedListingATabletIdIgnoresIt()
+    {
+        // The old key only ever held standard skill ids; a tablet id in it is not a standard skill and is dropped.
+        var mode = Read(null, new List<object> { 1L, 30L });
+        Assert.Equal(new[] { 1 }, mode.Starting!.ToArray());
+    }
+
+    [Fact]
+    public void TheNewKeyWinsWhenBothArePresent()
+    {
+        var mode = Read(new List<object> { 11L }, new List<object> { 1L, 2L });
+        Assert.True(mode.GatesTablets);
+        Assert.Equal(new[] { 11 }, mode.Starting!.ToArray());
+    }
+
+    [Fact]
+    public void UnknownAndNonNumericIdsAreIgnored()
+    {
+        var mode = Read(new List<object?> { 1L, 30L, 42L, 999L, "x", null, 11 });
+        Assert.Equal(new[] { 1, 11, 30, 42 }, mode.Starting!.OrderBy(i => i).ToArray());
+    }
+
+    [Fact]
+    public void AValueThatIsNotAListIsTreatedAsAbsent()
+    {
+        Assert.Null(Read("1,2,3").Starting);
+        Assert.Null(Read(5L).Starting);
+        Assert.Null(Read(null, "1,2").Starting);
+    }
+
+    [Fact]
+    public void ADlcSkillIsOnlyControlledWithTheDlcOn()
+    {
+        var mode = Read(new List<object> { 1L });
+        Assert.False(StartingSkillPolicy.IsControlled(false, false, true, dlcActive: false, mode));
+        Assert.True(StartingSkillPolicy.IsControlled(false, false, true, dlcActive: true, mode));
+    }
+
+    [Fact]
+    public void ADlcSkillThePlayerStartsWithIsUnlockedWhenControlled()
+    {
+        var mode = Read(new List<object> { 42L });
+        Assert.True(StartingSkillPolicy.IsUnlocked(42, isTablet: true, isStandard: false, mode, None));
+        Assert.False(StartingSkillPolicy.IsUnlocked(43, isTablet: true, isStandard: false, mode, None));
+    }
+
+    [Fact]
+    public void ASkillThePluginDoesNotKnowIsNeverControlled()
+    {
+        // Warcry (5) and the other disabled or non-pool abilities stay with the game.
+        var mode = Read(new List<object> { 1L });
+        Assert.False(StartingSkillPolicy.IsControlled(false, false, false, true, mode));
+        Assert.False(StartingSkillPolicy.IsControlled(false, false, false, false, mode));
     }
 }

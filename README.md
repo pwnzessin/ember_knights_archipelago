@@ -9,7 +9,7 @@ An unofficial [Archipelago](https://archipelago.gg) multiworld integration for *
 
 Both are on the [Releases page](../../releases). The APWorld is released separately under tags named `apworld-vX.Y.Z`, because it does not change in every plugin release. Use the newest of each.
 
-> **Status: v1.5, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
+> **Status: v1.6, experimental.** Single-player campaign. Co-op is not tested, and Boss Rush and Daily Dungeon are outside the tested scope. DLC support is new and was built from the game's own data but not yet played through (see [DLC support](#dlc-support)). See [Known issues](#known-issues).
 
 > **AI disclosure:** this project was basically fully vibe-coded; I only reviewed and tested the results in the game and inside of Archipelago lobbies. It has only been playtested a few times. Expect bugs, and any reports about issues you find are greatly appreciated.
 
@@ -72,10 +72,12 @@ Use a fresh save for a new seed. On the first connect of a new seed, anything al
 - **Reverse Heat:** difficulty starts high and is lowered by Heat Reduction items (see the heat options below).
 - **Relic orbs:** the check is sent the moment you pick up the orb. You still hand the orb to Esper, and her reveal shows what that orb's location really holds. If it is one of your relics you see that relic. If it is anything else, the overlay names the item and the player it is for.
 - **Tooltips:** Ember Tree and Ash upgrades show an `AP:` line naming the item the check holds. On Ember Tree nodes it only appears while the node can be unlocked.
-- **Starting skills:** you start with a random number of the standard skills, and the rest are items in the multiworld (see `starting_standard_skills`). Seeds generated before this option existed keep all standard skills unlocked.
-- **Starting relics:** the base game gives every new save 43 ordinary relics for free (Bone Plate, Meteor, Magic Tome and others), and the other 53 come from relic orbs. All of them form one pool (with the DLC, the ten DLC orb relics join it too). You start with a random number of them (see `starting_relics`), and every other relic is an item in the multiworld. The orb checks do not change, and the 43 formerly free relics add items only, no new locations. Seeds generated before this option existed keep those 43 relics unlocked.
+- **Starting skills:** the seven standard skills and the ten tablet skills (with the DLC, its ten tablet skills too) form one pool of 17 (27 with the DLC). You start with a random number of them (see `starting_skills`), and every other skill is an item in the multiworld. The tablets stay checks either way, so a tablet sends its location whichever skills you started with. Seeds generated before this option existed keep working: they only ever gated the standard skills.
+- **Starting relics:** the base game gives every new save 43 ordinary relics for free (Bone Plate, Meteor, Magic Tome and others), and the other 53 come from relic orbs. All of them form one pool (with the DLC, the ten DLC orb relics join it too). You start with a random number of them (see `starting_relics`), and every other relic is an item in the multiworld. The orb checks do not change, and the 43 formerly free relics add items only, no new locations. At least seven of your starting relics are always Common relics that need no category to appear, so the first relic selects have several relics to rotate through instead of repeating the same few. Seeds generated before this option existed keep those 43 relics unlocked.
+- **Short relic selects:** a relic select (the "pick one of three" screen) rolls each card as Common about 84% of the time and only offers relics you could have, so a player who owns few relics can get one or two cards. While connected, a select that comes out short is topped up to three with relics you own that passed every one of the game's own checks. A select the game already filled is never touched. Turn it off with `fill_short_relic_selectors`.
 - **First shop:** the first shop of a new save is scripted to always sell Bone Plate, Tainted Conduit and an Apple Pie. While connected, the two scripted relic slots are rolled normally from the relics you own instead. The free Apple Pie stays. Disconnecting (F7) restores the scripted shop.
-- **DeathLink and traps:** optional. Traps are Enemy Ambush, Boss Ambush and Praxis Arena.
+- **DeathLink and traps:** optional. Traps are Enemy Ambush, Boss Ambush and Praxis Arena. The enemies of an Enemy Ambush Trap now appear spread out in a small grid instead of stacked on one spot, because nothing in the game collides and a stack died to a single area attack. With `trap_enemies_any_world` on, each trapped enemy is drawn from every world your seed includes instead of copying the room's own enemies.
+- **Title screen:** a small line on the title screen says `Archipelago Mod <version>` and whether you are connected, and as which slot. It never shows the server address. Turn it off with `title_screen_label`.
 - **Overlay:** a status box shows connection state, heat and coins, with the latest Archipelago messages. See [HUD log window](#hud-log-window) for the optional in-game version.
 
 ## YAML options
@@ -94,13 +96,16 @@ These go in your player YAML under `Ember Knights:`. Defaults are in brackets.
 | `heat_reroll` | `every_run` [default], `once` | Whether the random assortment is rolled again each run or once per seed. |
 | `starting_archipelago_coins` | 1-25 [1] | Coins you start with. At least 1, so the first Ember Tree node can be bought. |
 | `extra_starting_weapons` | 0-6 [1] | Random extra base-game weapons unlocked from the start, besides the Ember Blade. |
-| `starting_standard_skills` | 3-7 [3] | How many of the seven standard skills you start with, chosen at random. The rest become items. 7 keeps all of them from the start. |
-| `starting_relics` | 10-43 [10] | How many relics you start with, picked at random from one pool of every relic (the 43 the base game gives away, the 53 orb relics, and the 10 DLC orb relics when `dlc` is on). Every other relic becomes an item. |
+| `starting_skills` | 3-17 [3] | How many skills you start with, picked at random from one pool of every skill (the 7 standard skills, the 10 tablet skills, and the 10 DLC tablet skills when `dlc` is on). Every other skill becomes an item. The tablets stay checks. **Replaces `starting_standard_skills`.** |
+| `starting_relics` | 10-43 [10] | How many relics you start with, picked at random from one pool of every relic (the 43 the base game gives away, the 53 orb relics, and the 10 DLC orb relics when `dlc` is on). Every other relic becomes an item. At least seven of them are always Common relics that need nothing else to appear. |
 | `ash_filler_amount` | 0-50 [5] | Ash each Ash item gives. 50 Gold is no longer placed as filler, so Ash fills the filler slots. If this is 0 and `traps` is off, filler still falls back to Ash items. |
 | `traps` | on / off | Split the filler slots between Ash and trap items. |
+| `trap_enemies_any_world` | on / off [off] | Let the Enemy Ambush Trap draw its enemies from every world your seed includes (the five base worlds, plus the four altered worlds and the Architect level with `dlc` on), not only the world you are in. Bosses, minibosses, hatcheries and props are never drawn, and no DLC enemy is drawn without `dlc`. Only matters with `traps` on. |
 | `death_link` | on / off | Send and receive DeathLinks. |
 
-The seven standard skills are Inferno, Bomb, Missile, Chakram, Frost Wall, Furious Charge and Cloak and Dagger. The ten tablet skills are always items.
+The seven standard skills are Inferno, Bomb, Missile, Chakram, Frost Wall, Furious Charge and Cloak and Dagger. A tablet skill that is not one of your starting skills is an item, and the tablet in the world is still a check either way.
+
+**Upgrading from 1.5 or older:** `starting_standard_skills` no longer exists. A YAML that still sets it generates with a warning for the unknown option and uses the default of 3 starting skills, so rename it to `starting_skills`. The number now counts every skill (up to 17), not only the standard ones, so 7 no longer means "all the standard skills".
 
 `starting_relics` replaces the old "always free" relics with items, so the number of items grows while the number of locations stays the same. The extra room comes from dropping 50 Gold, which is why filler is now Ash (and traps if enabled). The lowest setting (10) puts the most relics into the multiworld.
 
@@ -122,12 +127,14 @@ The file is `BepInEx/config/com.emberknights.archipelago.cfg`. BepInEx creates i
 | `Gameplay` | `extra_starting_weapons` | `1` | Fallback used only if the seed does not list starting weapons. |
 | `Gameplay` | `heat_mode` | `random_assortment` | Fallback used only if the seed does not carry one. |
 | `Gameplay` | `heat_reroll` | `every_run` | Fallback used only if the seed does not carry one. |
+| `Gameplay` | `fill_short_relic_selectors` | `true` | Top a relic select that came out with fewer than three cards up to three, using relics you own that passed every game check. |
 | `Visuals` | `archipelago_coin_icon` | `true` | Replace the Ember icon with the Archipelago coin while connected. |
+| `Visuals` | `title_screen_label` | `true` | Show the `Archipelago Mod` line and connection state on the title screen. Never shows the server address. |
 | `Visuals` | `hud_log_window` | `false` | Experimental in-game log window (see below). |
 | `Visuals` | `hud_log_scale` | `0.7` | Size of that window, 0.4 to 1.5. |
 | `Visuals` | `hud_log_hold_seconds` | `6` | How long it stays in focus after a new message, 1 to 60. |
 | `Visuals` | `hud_log_idle_opacity` | `0` | How visible it stays between messages. 0 hides it, 0.3 leaves it faint. |
-| `Diagnostics` | `relic_diagnostics` | `true` | Log relic orb activity to `LogOutput.log` (`[RelicDiag]` lines). |
+| `Diagnostics` | `relic_diagnostics` | `true` | Log relic orb activity and the first few relic selects, with what every game check said about each relic you own, to `LogOutput.log` (`[RelicDiag]` lines). |
 | `Diagnostics` | `praxis_diagnostics` | `true` | Log what happens after a Praxis Arena Trap (`[PraxisDiag]` lines). |
 
 The `Gameplay` settings are fallbacks for seeds that do not carry the value. For a current seed the YAML decides, and these have no effect.

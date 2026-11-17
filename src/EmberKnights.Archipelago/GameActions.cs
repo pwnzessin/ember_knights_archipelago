@@ -412,6 +412,31 @@ public static class GameActions
         }
     }
 
+    /// <summary>One trapped enemy that is waiting for its assets to finish loading before it can be spawned.</summary>
+    private sealed class PendingTrapSpawn
+    {
+        public eEnemy Type;
+        public Vector2 Position;
+        public int RoomInstId;
+        public UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationHandle<
+            Il2CppSystem.Collections.Generic.IList<GameObject>>? Handle;
+        public float StartedAt;
+    }
+
+    private static readonly List<PendingTrapSpawn> PendingTrapSpawns = new();
+
+    /// <summary>
+    /// How long a pending other-world enemy may wait for its assets before it is dropped, in seconds. A load that never
+    /// completes must not hold a trap forever.
+    /// </summary>
+    private const float TrapAssetLoadTimeoutSeconds = 8f;
+
+    /// <summary>
+    /// Fires the Enemy Ambush Trap. The enemies stand in a small grid around where a live enemy of the room stands, because
+    /// nothing in the game collides and a stack would die to a single area attack. With the seed's
+    /// <c>trap_enemies_any_world</c> on, each enemy is drawn from every world the seed includes instead of copying the
+    /// room's own enemies; an enemy from another world first has its assets loaded, then it is spawned.
+    /// </summary>
     public static bool TriggerEnemyAmbushTrap(int count)
     {
         try
@@ -419,24 +444,46 @@ public static class GameActions
             if (!TryGetActiveBattleRoom(out var world, out var room, out var activeEnemies))
                 return false;
 
+            var service = ArchipelagoPlugin.Instance.Service;
+            var anyWorld = service.TrapEnemiesAnyWorld;
             var spawnCount = Math.Max(1, count);
+
+            // The grid is centred on a live enemy of the room, which is where the old code put the whole stack.
+            var centre = activeEnemies[System.Random.Shared.Next(activeEnemies.Count)].Position;
+            var offsets = TrapSpawnPolicy.GridOffsets(spawnCount);
+
+            var pool = anyWorld ? BuildAnyWorldEnemyPool(service.DlcActive) : null;
+            if (anyWorld && (pool is null || pool.Count == 0))
+            {
+                ArchipelagoPlugin.LogSource.LogWarning(
+                    "Trap enemies from any world: no eligible enemy definitions were found; using the room's own enemies.");
+                anyWorld = false;
+            }
+
+            var spawned = 0;
             for (var i = 0; i < spawnCount; i++)
             {
-                var chosen = activeEnemies[System.Random.Shared.Next(activeEnemies.Count)];
-                world.SpawnEnemy(
-                    true,
-                    chosen.Type,
-                    chosen.Position,
-                    eEnemyRank.Normal,
-                    -1,
-                    room.RoomInstId,
-                    -1,
-                    -1,
-                    false,
-                    GameCode.eEnemyDispatchEventMask.ALL,
-                    world.GetNextNetId(),
-                    true);
+                var type = anyWorld
+                    ? pool![TrapSpawnPolicy.PickIndex(pool.Count, System.Random.Shared.Next)]
+                    : activeEnemies[System.Random.Shared.Next(activeEnemies.Count)].Type;
+                var wanted = new Vector2(centre.x + offsets[i].X, centre.y + offsets[i].Y);
+                var position = SnapToWalkable(wanted, centre);
+
+                if (anyWorld && !world.IsEntityPrefabLoaded(eEntityType.Enemy, (int)type))
+                {
+                    if (QueueTrapSpawnAfterLoad(world, type, position, room.RoomInstId))
+                        spawned++;
+                    continue;
+                }
+
+                if (SpawnTrapEnemy(world, type, position, room.RoomInstId))
+                    spawned++;
             }
+
+            if (spawned == 0)
+                return false;
+            if (spawned < spawnCount)
+                ArchipelagoPlugin.LogSource.LogInfo($"Enemy ambush trap: placed {spawned} of {spawnCount} enemies.");
             return true;
         }
         catch (Exception exception)
@@ -445,6 +492,195 @@ public static class GameActions
             return false;
         }
     }
+
+    private static bool SpawnTrapEnemy(GameCode.XWorld world, eEnemy type, Vector2 position, int roomInstId)
+    {
+        try
+        {
+            world.SpawnEnemy(
+                true,
+                type,
+                position,
+                eEnemyRank.Normal,
+                -1,
+                roomInstId,
+                -1,
+                -1,
+                false,
+                GameCode.eEnemyDispatchEventMask.ALL,
+                world.GetNextNetId(),
+                true);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ArchipelagoPlugin.LogSource.LogWarning($"Could not spawn trap enemy {type}: {exception.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Moves a grid cell onto ground the enemy can stand on. A cell that is not walkable is pulled to the nearest safe
+    /// point; if the game cannot find one, the cell falls back to the centre, which is where an enemy already stands.
+    /// </summary>
+    private static Vector2 SnapToWalkable(Vector2 wanted, Vector2 fallback)
+    {
+        try
+        {
+            var game = GameCode.Game;
+            if (game is null)
+                return wanted;
+            if (game.IsWalkableNode(wanted) && !game.IsInsidePit(wanted))
+                return wanted;
+
+            var grid = GameCode.PathGrid;
+            if (grid is null)
+                return fallback;
+            var safe = grid.GetClosestSafePosition(wanted, out var found, false, 16f, false);
+            return found ? safe : fallback;
+        }
+        catch (Exception exception)
+        {
+            ArchipelagoPlugin.LogSource.LogWarning($"Could not check a trap enemy position: {exception.Message}");
+            return fallback;
+        }
+    }
+
+    /// <summary>
+    /// Every enemy the any-world trap may draw: ordinary base-rank enemies of the base worlds, and of the DLC worlds only
+    /// when the seed uses the DLC. Built from the game's own enemy definitions each time, so it follows the installed
+    /// game version. Returns an empty list if the definitions are not available.
+    /// </summary>
+    private static List<eEnemy> BuildAnyWorldEnemyPool(bool dlcActive)
+    {
+        var pool = new List<eEnemy>();
+        var defs = GameCode.Defs?.enemyFile?.enemyDefs;
+        if (defs is null)
+            return pool;
+
+        for (var i = 0; i < defs.Count; i++)
+        {
+            var def = defs[i];
+            if (def is null)
+                continue;
+            if (!TrapSpawnPolicy.IsEligibleEnemy(
+                    def.enabled,
+                    def.DLCContent,
+                    (int)def.Area,
+                    def.IsBoss,
+                    def.IsMiniBoss,
+                    def.EnemyRank == eEnemyRank.Normal,
+                    def.IsStationary,
+                    def.IsPlayerClone,
+                    def.MaxSpawnCount,
+                    dlcActive))
+                continue;
+            pool.Add(def.EnemyType);
+        }
+
+        // The pool comes from the game's own definitions, so the first time it is built for a given DLC setting the log
+        // records what it holds. That makes the pool verifiable from LogOutput.log without any extra tooling.
+        if (loggedPoolForDlc != dlcActive)
+        {
+            loggedPoolForDlc = dlcActive;
+            ArchipelagoPlugin.LogSource.LogInfo(
+                $"Trap enemies from any world (DLC {(dlcActive ? "on" : "off")}): {pool.Count} eligible enemies: " +
+                string.Join(", ", pool.Select(type => type.ToString())));
+        }
+        return pool;
+    }
+
+    private static bool? loggedPoolForDlc;
+
+    /// <summary>
+    /// Asks the game to load the assets of an enemy that is not part of the current world, using the same loader the game
+    /// uses when it enters a world. The enemy is spawned later by <see cref="TickPendingTrapSpawns"/>, once the load has
+    /// finished. Returns false only when the load could not even be started.
+    /// </summary>
+    private static bool QueueTrapSpawnAfterLoad(GameCode.XWorld world, eEnemy type, Vector2 position, int roomInstId)
+    {
+        try
+        {
+            var game = GameCode.Game;
+            var def = XEnemyDef.Get(type);
+            if (game is null || def is null)
+                return false;
+
+            // The game builds the list of asset keys for an enemy (its prefab and the projectiles, gibs and props it
+            // uses) in this static helper, and loads them with LoadAddressableKeys when it enters a world.
+            var keys = new Il2CppSystem.Collections.Generic.List<string>();
+            GameCode.GameInst.AddEnemyAddressableAssets(def, keys);
+            var handle = game.LoadAddressableKeys(keys, false);
+            PendingTrapSpawns.Add(new PendingTrapSpawn
+            {
+                Type = type,
+                Position = position,
+                RoomInstId = roomInstId,
+                Handle = handle,
+                StartedAt = Time.realtimeSinceStartup,
+            });
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ArchipelagoPlugin.LogSource.LogWarning($"Could not load assets for trap enemy {type}: {exception.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Spawns the other-world trap enemies whose assets have finished loading, and drops those whose load failed or ran
+    /// past the timeout. Called every frame. Does nothing when nothing is waiting.
+    /// </summary>
+    public static void TickPendingTrapSpawns()
+    {
+        if (PendingTrapSpawns.Count == 0)
+            return;
+
+        try
+        {
+            var world = GameCode.Game?.World;
+            for (var i = PendingTrapSpawns.Count - 1; i >= 0; i--)
+            {
+                var pending = PendingTrapSpawns[i];
+                var timedOut = Time.realtimeSinceStartup - pending.StartedAt > TrapAssetLoadTimeoutSeconds;
+                if (world is null || timedOut)
+                {
+                    PendingTrapSpawns.RemoveAt(i);
+                    ArchipelagoPlugin.LogSource.LogWarning(
+                        $"Trap enemy {pending.Type} was dropped: its assets did not finish loading in time.");
+                    continue;
+                }
+
+                // A load that finished with a failure will never produce the prefab, so stop waiting for it now.
+                if (pending.Handle is { } handle && handle.IsValid() && handle.IsDone &&
+                    handle.Status == UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Failed)
+                {
+                    PendingTrapSpawns.RemoveAt(i);
+                    ArchipelagoPlugin.LogSource.LogWarning($"Trap enemy {pending.Type} was dropped: its assets failed to load.");
+                    continue;
+                }
+
+                // The prefab being registered is what SpawnEnemy actually needs, so that is the signal to spawn.
+                if (!world.IsEntityPrefabLoaded(eEntityType.Enemy, (int)pending.Type))
+                    continue;
+
+                PendingTrapSpawns.RemoveAt(i);
+                // The player may have left the room while the assets loaded; an enemy spawned into another room would
+                // be orphaned, so only spawn while the trap's room is still the current one.
+                if (world.currentRoomCMP is null || world.currentRoomCMP.RoomInstId != pending.RoomInstId)
+                    continue;
+                SpawnTrapEnemy(world, pending.Type, pending.Position, pending.RoomInstId);
+            }
+        }
+        catch (Exception exception)
+        {
+            PendingTrapSpawns.Clear();
+            ArchipelagoPlugin.LogSource.LogWarning($"Pending trap enemies were cleared: {exception.Message}");
+        }
+    }
+
+    public static void ClearPendingTrapSpawns() => PendingTrapSpawns.Clear();
 
     public static bool TriggerBossAmbushTrap()
     {

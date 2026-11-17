@@ -9,6 +9,7 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
     private bool autoConnectAttempted;
     private HudLogWindow? hudWindow;
     private bool sinkAttached;
+    private readonly TitleScreenLabel titleLabel = new();
 
     public ArchipelagoBehaviour(IntPtr pointer) : base(pointer)
     {
@@ -26,7 +27,11 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
             return;
 
         plugin.Service.PumpMainThread();
+        // Trap enemies from another world wait here for their assets, then appear. Does nothing when none are waiting.
+        if (plugin.Service.IsActive)
+            GameActions.TickPendingTrapSpawns();
         TickHudWindow();
+        TickTitleLabel(plugin);
         if (Input.GetKeyDown(KeyCode.F6))
             plugin.Service.Connect();
         if (Input.GetKeyDown(KeyCode.F7))
@@ -37,6 +42,25 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
             autoConnectAttempted = true;
             plugin.Service.Connect();
         }
+    }
+
+    /// <summary>
+    /// Keeps the title screen line current. It only exists while the game's main menu is open, and is skipped entirely
+    /// when the config turns it off.
+    /// </summary>
+    private void TickTitleLabel(ArchipelagoPlugin plugin)
+    {
+        if (!plugin.TitleScreenLabelEnabled.Value)
+        {
+            // Hide it right away if the player switches it off while the menu is up.
+            titleLabel.Tick("", menuVisible: false);
+            return;
+        }
+
+        var service = plugin.Service;
+        var line = TitleStatusText.Build(
+            ArchipelagoPlugin.PluginVersion, service.IsConnected, service.IsActive, plugin.SlotName.Value);
+        titleLabel.Tick(line, TitleScreenLabel.IsMainMenuVisible());
     }
 
     /// <summary>

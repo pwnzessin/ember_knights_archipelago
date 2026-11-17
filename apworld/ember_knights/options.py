@@ -131,21 +131,21 @@ class ExtraStartingWeapons(Range):
     default = 1
 
 
-class StartingStandardSkills(Range):
-    """How many of the seven standard skills you start with, chosen at random.
+class StartingSkills(Range):
+    """How many skills you start with, chosen at random from one big pool of skills.
 
-    The standard skills are the ones every run has in the base game: Inferno, Bomb, Missile, Chakram,
-    Frost Wall, Furious Charge and Cloak and Dagger. You start with this many of them, picked at random
-    for your seed. The rest are no longer free: they become items found in the multiworld, next to the
-    ten tablet skills.
+    In the base game seven standard skills are free for every new save (Inferno, Bomb, Missile, Chakram, Frost Wall,
+    Furious Charge and Cloak and Dagger) and the ten tablet skills are found in the world. This option puts all of
+    them into one pool of 17 (27 with Wrath of the Architect, which adds its ten tablet skills). You start with this
+    many, picked at random for your seed. Every other skill stops being free and becomes an item found in the
+    multiworld. The tablets stay checks either way, so they send their location no matter which skills you started with.
 
-    Set to 7 to keep all standard skills from the start, as in the base game. The minimum is 3 so a run
-    always has real skills to choose from.
+    The minimum is 3 so a run always has real skills to choose from.
     """
 
-    display_name = "Starting Standard Skills"
+    display_name = "Starting Skills"
     range_start = 3
-    range_end = 7
+    range_end = 17
     default = 3
 
 
@@ -159,6 +159,10 @@ class StartingRelics(Range):
 
     The minimum is 10 so a run always has some relics to find in its first relic select. Set to 43 to start with as
     many relics as the base game gives you for free (though not necessarily the same ones).
+
+    At least seven of your starting relics are always Common relics that need nothing else to appear (21 relics
+    qualify). A relic select rolls each card as Common about 84% of the time and only offers relics you could have, so
+    without this a start of mostly rarer relics shows the same few over and over. The rest of the start is random.
     """
 
     display_name = "Starting Relics"
@@ -189,6 +193,22 @@ class Traps(Toggle):
     display_name = "Traps"
 
 
+class TrapEnemiesAnyWorld(Toggle):
+    """Let the Enemy Ambush Trap use enemies from any world, not just the world you are in.
+
+    Off (default): a trap spawns more of the enemies already fighting you in the room, as before.
+    On: each trapped enemy is picked at random from the ordinary enemies of every world your seed includes: the five
+    base worlds, plus the four altered worlds and the Architect level when Wrath of the Architect is on. Without the
+    DLC option, no DLC enemy is ever chosen. Bosses, minibosses, hatcheries and stationary props are never picked.
+
+    Either way the trapped enemies now appear spread out in a small grid instead of stacked on one spot.
+
+    This only matters when Traps is on.
+    """
+
+    display_name = "Trap Enemies From Any World"
+
+
 class DeathLink(Toggle):
     """Send and receive DeathLinks when the local player dies."""
 
@@ -207,8 +227,9 @@ class EmberKnightsOptions(PerGameCommonOptions):
     heat_reroll: HeatReroll
     starting_archipelago_coins: StartingArchipelagoCoins
     extra_starting_weapons: ExtraStartingWeapons
-    starting_standard_skills: StartingStandardSkills
+    starting_skills: StartingSkills
     starting_relics: StartingRelics
     ash_filler_amount: AshFillerAmount
     traps: Traps
+    trap_enemies_any_world: TrapEnemiesAnyWorld
     death_link: DeathLink

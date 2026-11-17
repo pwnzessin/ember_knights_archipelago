@@ -17,8 +17,8 @@ public sealed class ConnectionService
     private readonly HashSet<int> ownedAbilities = new();
     private readonly HashSet<int> startingWeapons = new() { 1 };
     /// <summary>Standard skills this seed starts with, or null when the seed does not gate standard skills.</summary>
-    private HashSet<int>? startingStandardSkills;
-    /// <summary>Relics this seed starts with, or null when the seed does not gate the 43 default relics.</summary>
+    /// <summary>What the seed says about starting skills; see <see cref="StartingSkillPolicy"/>. Default means nothing is gated.</summary>
+    private StartingSkillPolicy.Mode skillMode = new(null, false);    /// <summary>Relics this seed starts with, or null when the seed does not gate the 43 default relics.</summary>
     private HashSet<int>? startingRelics;
     private readonly HashSet<int> ownedWeapons = new() { 1 };
     private readonly HashSet<int> ownedRelics = new();
@@ -96,6 +96,12 @@ public sealed class ConnectionService
     public bool CuratedHeatDifficulty { get; private set; }
     /// <summary>Ash given by each Ash item; null means the seed predates the option and the catalog amount applies.</summary>
     public int? AshFillerAmount { get; private set; }
+
+    /// <summary>
+    /// True when the seed lets the Enemy Ambush Trap draw enemies from any world (<c>trap_enemies_any_world</c>). A seed
+    /// from before the option existed leaves it false, and trap enemies then come from the world the player is in.
+    /// </summary>
+    public bool TrapEnemiesAnyWorld { get; private set; }
     public int ActiveHeat => HeatSolver.EffectiveHeat(StartHeat, MinimumHeat, HeatReductionPerItem, HeatReductionsReceived);
     public int StartingArchipelagoCoins { get; private set; } = 1;
     public int ArchipelagoCoinsReceived { get; private set; }
@@ -168,9 +174,10 @@ public sealed class ConnectionService
         ownedAbilities.Clear();
         startingWeapons.Clear();
         startingWeapons.Add(1);
-        startingStandardSkills = null;
+        skillMode = new(null, false);
         startingRelics = null;
         DlcActive = false;
+        TrapEnemiesAnyWorld = false;
         ownedWeapons.Clear();
         ownedWeapons.Add(1);
         ownedRelics.Clear();
@@ -189,6 +196,7 @@ public sealed class ConnectionService
         DeathLinkEnabled = false;
         GameActions.RestoreVanillaEmberTreeCosts();
         GameActions.RestoreVanillaFirstShop();
+        GameActions.ClearPendingTrapSpawns();
         CoinIconPatcher.Restore();
         StatusText = "Disconnected";
         LastMessage = "AP mode disabled; vanilla unlock behavior restored.";
@@ -236,22 +244,25 @@ public sealed class ConnectionService
     {
         if (!IsActive)
             return vanillaResult;
-        if (GameCatalog.Data.SkillForAbility(abilityId) is not null)
-            return OwnsAbility(abilityId);
-        // A DLC skill is controlled by the multiworld only when the seed uses the DLC. Otherwise the game decides.
-        if (DlcActive && GameCatalog.Data.DlcSkillForAbility(abilityId) is not null)
-            return OwnsAbility(abilityId);
-        // A standard skill is free only when the seed does not gate them. Otherwise it has to be a starting skill
-        // or one the multiworld has delivered.
-        if (GameCatalog.Data.StandardSkillForAbility(abilityId) is not null)
-            return StandardSkillPolicy.IsUnlocked(abilityId, startingStandardSkills, ownedAbilities);
-        return vanillaResult;
+        var kind = ClassifySkill(abilityId);
+        if (!StartingSkillPolicy.IsControlled(kind.IsTablet, kind.IsStandard, kind.IsDlcSkill, DlcActive, skillMode))
+            return vanillaResult;
+        // A DLC skill only reaches here when the seed uses the DLC, so a DLC-off seed leaves the game to decide.
+        return StartingSkillPolicy.IsUnlocked(abilityId, kind.IsTablet || kind.IsDlcSkill, kind.IsStandard, skillMode, ownedAbilities);
     }
 
-    public bool ShouldSuppressAbilityGrant(int abilityId) =>
-        IsActive && (GameCatalog.Data.SkillForAbility(abilityId) is not null ||
-                     (DlcActive && GameCatalog.Data.DlcSkillForAbility(abilityId) is not null) ||
-                     (startingStandardSkills is not null && GameCatalog.Data.StandardSkillForAbility(abilityId) is not null));
+    private static (bool IsTablet, bool IsStandard, bool IsDlcSkill) ClassifySkill(int abilityId) => (
+        GameCatalog.Data.SkillForAbility(abilityId) is not null,
+        GameCatalog.Data.StandardSkillForAbility(abilityId) is not null,
+        GameCatalog.Data.DlcSkillForAbility(abilityId) is not null);
+
+    public bool ShouldSuppressAbilityGrant(int abilityId)
+    {
+        if (!IsActive)
+            return false;
+        var kind = ClassifySkill(abilityId);
+        return StartingSkillPolicy.IsControlled(kind.IsTablet, kind.IsStandard, kind.IsDlcSkill, DlcActive, skillMode);
+    }
 
     public bool OwnsWeapon(int weaponId) => weaponId == 1 || ownedWeapons.Contains(weaponId);
 
@@ -283,6 +294,12 @@ public sealed class ConnectionService
 
     public bool OwnsRelic(int relicDefId) =>
         StartingRelicPolicy.IsUnlocked(relicDefId, startingRelics, ownedRelics);
+
+    /// <summary>How many starting relics the seed lists, or -1 for a seed that does not gate the default relics. For diagnostics.</summary>
+    public int StartingRelicCount => startingRelics?.Count ?? -1;
+
+    /// <summary>How many relics the multiworld has delivered so far. For diagnostics.</summary>
+    public int OwnedRelicCount => ownedRelics.Count;
 
     /// <summary>
     /// The 53 base orb relics are always controlled by the multiworld, and so are the 43 default relics when the seed
@@ -858,9 +875,17 @@ public sealed class ConnectionService
             ownedWeapons.UnionWith(startingWeapons);
             success.SlotData.TryGetValue("dlc", out var dlcRaw);
             DlcActive = DlcPolicy.ReadDlcActive(dlcRaw);
-            success.SlotData.TryGetValue("starting_standard_skill_ids", out var startingSkillsRaw);
-            startingStandardSkills = StandardSkillPolicy.ReadStartingSkills(
-                startingSkillsRaw, id => GameCatalog.Data.StandardSkillForAbility(id) is not null);
+            success.SlotData.TryGetValue("trap_enemies_any_world", out var anyWorldRaw);
+            TrapEnemiesAnyWorld = TrapSpawnPolicy.ReadAnyWorld(anyWorldRaw);
+            success.SlotData.TryGetValue("starting_skill_ids", out var startingSkillsRaw);
+            success.SlotData.TryGetValue("starting_standard_skill_ids", out var oldStartingSkillsRaw);
+            skillMode = StartingSkillPolicy.Read(
+                startingSkillsRaw,
+                oldStartingSkillsRaw,
+                id => GameCatalog.Data.SkillForAbility(id) is not null ||
+                      GameCatalog.Data.StandardSkillForAbility(id) is not null ||
+                      GameCatalog.Data.DlcSkillForAbility(id) is not null,
+                id => GameCatalog.Data.StandardSkillForAbility(id) is not null);
             success.SlotData.TryGetValue("starting_relic_ids", out var startingRelicsRaw);
             startingRelics = StartingRelicPolicy.ReadStartingRelics(
                 startingRelicsRaw,

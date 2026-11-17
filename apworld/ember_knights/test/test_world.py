@@ -43,11 +43,15 @@ class TestDefaultWorld(EmberKnightsTestBase):
             name for def_id, name in self.world.relic_pool() if def_id in self.world.starting_relic_ids
         }
         relic_items = {name for _, name in self.world.relic_pool()} - starting_relics
-        single_items = {skill.name for skill in CATALOG.skills} | relic_items
+        starting_skills = {
+            name for ability_id, name in self.world.skill_pool() if ability_id in self.world.starting_skill_ids
+        }
+        skill_items = {name for _, name in self.world.skill_pool()} - starting_skills
+        single_items = skill_items | relic_items
         self.assertTrue(single_items.issubset(item_names))
         for name in single_items:
             self.assertEqual(1, item_names.count(name), name)
-        for name in starting_relics:
+        for name in starting_relics | starting_skills:
             self.assertEqual(0, item_names.count(name), name)
         # Default extra_starting_weapons=1 -> Sword (1) + 1 random extra starting weapon, 5 weapons in the pool.
         starting_ids = self.world.starting_weapon_ids
@@ -62,28 +66,31 @@ class TestDefaultWorld(EmberKnightsTestBase):
         self.assertEqual(35, item_names.count("2 Archipelago Coins"))
         self.assertEqual(0, item_names.count("3 Archipelago Coins"))
         filler = {filler.name for filler in CATALOG.fillers}
-        pool_standard_skills = {name for name in item_names if name in self.world.item_name_groups["Standard Skills"]}
-        non_filler = single_items | set(pool_weapons) | pool_standard_skills | {CATALOG.heat_reduction_item_name}
+        non_filler = single_items | set(pool_weapons) | {CATALOG.heat_reduction_item_name}
         self.assertEqual(set(item_names) - non_filler, set(item_names) & filler)
 
-    def test_default_starts_with_three_standard_skills_and_pools_the_other_four(self) -> None:
-        # Default starting_standard_skills=3: three random standard skills are precollected, four are in the pool.
-        standard = {skill.name for skill in CATALOG.standard_skills}
-        starting_ids = self.world.starting_standard_skill_ids
+    def test_default_starts_with_three_skills_out_of_seventeen_and_pools_the_other_fourteen(self) -> None:
+        # Default starting_skills=3: three random skills of the 17 (7 standard + 10 tablet) are precollected.
+        pool = self.world.skill_pool()
+        self.assertEqual(17, len(pool))
+        starting_ids = self.world.starting_skill_ids
         self.assertEqual(3, len(starting_ids))
         self.assertEqual(len(starting_ids), len(set(starting_ids)))
-        valid_ids = {skill.ability_id for skill in CATALOG.standard_skills}
-        self.assertTrue(set(starting_ids).issubset(valid_ids))
-        starting_names = {skill.name for skill in CATALOG.standard_skills if skill.ability_id in starting_ids}
-        in_pool = [item.name for item in self.multiworld.itempool if item.name in standard]
-        self.assertEqual(4, len(in_pool))
+        self.assertTrue(set(starting_ids).issubset({ability_id for ability_id, _ in pool}))
+        starting_names = {name for ability_id, name in pool if ability_id in starting_ids}
+        all_names = {name for _, name in pool}
+        in_pool = [item.name for item in self.multiworld.itempool if item.name in all_names]
+        self.assertEqual(14, len(in_pool))
         self.assertEqual(len(in_pool), len(set(in_pool)))
-        # Each standard skill is either a starting skill or in the pool, never both and never neither.
+        # Each skill is either a starting skill or in the pool, never both and never neither.
         self.assertFalse(starting_names & set(in_pool))
-        self.assertEqual(standard, starting_names | set(in_pool))
+        self.assertEqual(all_names, starting_names | set(in_pool))
         precollected = {item.name for item in self.multiworld.precollected_items[self.player]}
         self.assertTrue(starting_names.issubset(precollected))
-        self.assertEqual(starting_ids, self.world.fill_slot_data()["starting_standard_skill_ids"])
+        self.assertEqual(starting_ids, self.world.fill_slot_data()["starting_skill_ids"])
+        self.assertEqual(3, self.world.fill_slot_data()["starting_skills"])
+        # The old key is gone: a seed with the new one is read by its own key only.
+        self.assertNotIn("starting_standard_skill_ids", self.world.fill_slot_data())
 
     def test_standard_skills_are_useful_not_progression(self) -> None:
         for item in self.multiworld.itempool:
@@ -197,28 +204,75 @@ class TestZeroHeatSpanWorld(EmberKnightsTestBase):
         self.assertNotIn(CATALOG.heat_reduction_item_name, item_names)
 
 
-class TestAllStandardSkillsWorld(EmberKnightsTestBase):
-    options = {"starting_standard_skills": 7}
+class TestAllSeventeenSkillsWorld(EmberKnightsTestBase):
+    options = {"starting_skills": 17}
 
-    def test_starting_with_all_seven_puts_none_in_the_pool(self) -> None:
-        standard = {skill.name for skill in CATALOG.standard_skills}
-        self.assertEqual(7, len(self.world.starting_standard_skill_ids))
-        self.assertEqual({s.ability_id for s in CATALOG.standard_skills}, set(self.world.starting_standard_skill_ids))
-        self.assertEqual([], [item.name for item in self.multiworld.itempool if item.name in standard])
-        # The pool still exactly fills the locations, so the extra filler slots absorbed the four missing skills.
+    def test_starting_with_all_seventeen_puts_none_in_the_pool(self) -> None:
+        all_names = {name for _, name in self.world.skill_pool()}
+        self.assertEqual(17, len(self.world.starting_skill_ids))
+        self.assertEqual({ability_id for ability_id, _ in self.world.skill_pool()}, set(self.world.starting_skill_ids))
+        self.assertEqual([], [item.name for item in self.multiworld.itempool if item.name in all_names])
+        # The pool still exactly fills the locations, so the extra filler slots absorbed the missing skill items.
+        locations = regular_locations(self)
+        self.assertEqual(len(locations), len(self.multiworld.itempool))
+
+    def test_every_tablet_is_still_a_check(self) -> None:
+        # Starting with a tablet skill does not remove its tablet: the location exists whatever you started with.
+        names = {location.name for location in regular_locations(self)}
+        self.assertTrue({skill.location_name for skill in CATALOG.skills}.issubset(names))
+
+
+class TestTenSkillsWorld(EmberKnightsTestBase):
+    options = {"starting_skills": 10}
+
+    def test_ten_start_and_seven_are_pooled(self) -> None:
+        all_names = {name for _, name in self.world.skill_pool()}
+        self.assertEqual(10, len(self.world.starting_skill_ids))
+        self.assertEqual(7, len([item for item in self.multiworld.itempool if item.name in all_names]))
         locations = regular_locations(self)
         self.assertEqual(len(locations), len(self.multiworld.itempool))
 
 
-class TestFiveStandardSkillsWorld(EmberKnightsTestBase):
-    options = {"starting_standard_skills": 5}
+class TestSkillsWithDlc(EmberKnightsTestBase):
+    options = {"dlc": True, "starting_skills": 5}
 
-    def test_five_start_and_two_are_pooled(self) -> None:
-        standard = {skill.name for skill in CATALOG.standard_skills}
-        self.assertEqual(5, len(self.world.starting_standard_skill_ids))
-        self.assertEqual(2, len([item for item in self.multiworld.itempool if item.name in standard]))
-        locations = regular_locations(self)
-        self.assertEqual(len(locations), len(self.multiworld.itempool))
+    def test_the_dlc_tablet_skills_join_the_pool(self) -> None:
+        pool = self.world.skill_pool()
+        self.assertEqual(27, len(pool))
+        self.assertEqual(5, len(self.world.starting_skill_ids))
+        names = {item.name for item in self.multiworld.itempool}
+        starting = set(self.world.starting_skill_ids)
+        for skill in CATALOG.dlc_skills:
+            self.assertEqual(skill.ability_id not in starting, skill.name in names, skill.name)
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestSkillsWithoutDlcNeverHoldDlcSkills(EmberKnightsTestBase):
+    options = {"dlc": False, "starting_skills": 17}
+
+    def test_no_dlc_skill_is_started_or_pooled(self) -> None:
+        dlc_ids = {skill.ability_id for skill in CATALOG.dlc_skills}
+        dlc_names = {skill.name for skill in CATALOG.dlc_skills}
+        self.assertFalse(dlc_ids & set(self.world.starting_skill_ids))
+        self.assertFalse(dlc_names & {item.name for item in self.multiworld.itempool})
+        precollected = {item.name for item in self.multiworld.precollected_items[self.player]}
+        self.assertFalse(dlc_names & precollected)
+
+
+class TestSkillsTightestPool(EmberKnightsTestBase):
+    """The minimum start (3) pools the most skills; the pool must still fit with every other option at its tightest."""
+
+    options = {
+        "boss_variants": False,
+        "starting_skills": 3,
+        "extra_starting_weapons": 0,
+        "start_heat": 0,
+        "minimum_heat": 0,
+        "starting_relics": 10,
+    }
+
+    def test_pool_fits(self) -> None:
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
 
 
 class TestStartingRelicsDefault(EmberKnightsTestBase):
@@ -276,7 +330,7 @@ class TestStartingRelicsTightestPool(EmberKnightsTestBase):
 
     options = {
         "boss_variants": False,
-        "starting_standard_skills": 7,
+        "starting_skills": 17,
         "extra_starting_weapons": 0,
         "start_heat": 0,
         "minimum_heat": 0,
@@ -286,6 +340,62 @@ class TestStartingRelicsTightestPool(EmberKnightsTestBase):
     def test_pool_fits(self) -> None:
         self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
 
+
+class TestStarterFriendlyRelicsDefault(EmberKnightsTestBase):
+    options = {}
+
+    def test_at_least_seven_starting_relics_are_common_without_a_category_requirement(self) -> None:
+        friendly = CATALOG.starter_friendly_relics
+        starting = self.world.starting_relic_ids
+        self.assertEqual(10, len(starting))
+        self.assertGreaterEqual(len(set(starting) & friendly), 7)
+
+    def test_the_start_is_still_exactly_ten_distinct_relics_from_the_pool(self) -> None:
+        starting = self.world.starting_relic_ids
+        self.assertEqual(10, len(set(starting)))
+        self.assertTrue(set(starting).issubset({def_id for def_id, _ in self.world.relic_pool()}))
+        self.assertEqual(starting, sorted(starting))
+        self.assertEqual(starting, self.world.fill_slot_data()["starting_relic_ids"])
+
+    def test_the_pool_still_exactly_fills_the_locations(self) -> None:
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestStarterFriendlyRelicsSmallStart(EmberKnightsTestBase):
+    options = {"starting_relics": 10, "dlc": False}
+
+    def test_the_guarantee_holds_without_the_dlc(self) -> None:
+        self.assertGreaterEqual(len(set(self.world.starting_relic_ids) & CATALOG.starter_friendly_relics), 7)
+
+
+class TestStarterFriendlyRelicsLargeStart(EmberKnightsTestBase):
+    options = {"starting_relics": 43, "dlc": True}
+
+    def test_a_large_start_keeps_the_guarantee_and_the_count(self) -> None:
+        starting = self.world.starting_relic_ids
+        self.assertEqual(43, len(set(starting)))
+        self.assertGreaterEqual(len(set(starting) & CATALOG.starter_friendly_relics), 7)
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestStarterFriendlyRelicsCatalogContract(unittest.TestCase):
+    def test_the_list_is_the_common_unrestricted_base_relics(self) -> None:
+        friendly = CATALOG.starter_friendly_relics
+        self.assertEqual(21, len(friendly))
+        base_pool = {relic.def_id for relic in CATALOG.default_relics} | {orb.def_id for orb in CATALOG.relic_orbs}
+        # Every entry is a base relic the starting pool can hold, and none is a DLC orb relic.
+        self.assertTrue(friendly.issubset(base_pool))
+        self.assertFalse(friendly & {orb.def_id for orb in CATALOG.dlc_relic_orbs})
+        # Chronograph (40), the first orb relic, is one of them; Necronomicon (214, DLC) and Bone Plate's Epic neighbours are not.
+        self.assertIn(40, friendly)
+        self.assertNotIn(214, friendly)
+
+    def test_seven_is_always_reachable_with_the_smallest_start(self) -> None:
+        # The guarantee must never exceed what exists, or the pick would have to invent relics.
+        self.assertGreaterEqual(len(CATALOG.starter_friendly_relics), 7)
+        from ..options import StartingRelics
+
+        self.assertGreaterEqual(StartingRelics.range_start, 7)
 
 class TestStartingRelicsCatalogContract(unittest.TestCase):
     def test_the_option_range_is_ten_to_forty_three(self) -> None:
@@ -339,11 +449,16 @@ class TestStandardSkillCatalogContract(unittest.TestCase):
             self.assertNotIn(name.replace(" Skill Tablet", ""), standard)
 
     def test_option_range_never_allows_fewer_than_three(self) -> None:
-        from ..options import StartingStandardSkills
+        from ..options import StartingSkills
 
-        self.assertEqual(3, StartingStandardSkills.range_start)
-        self.assertEqual(7, StartingStandardSkills.range_end)
-        self.assertEqual(3, StartingStandardSkills.default)
+        self.assertEqual(3, StartingSkills.range_start)
+        self.assertEqual(17, StartingSkills.range_end)
+        self.assertEqual(3, StartingSkills.default)
+
+    def test_the_old_option_is_gone(self) -> None:
+        from .. import options
+
+        self.assertFalse(hasattr(options, "StartingStandardSkills"))
 
 
 def expected_dlc_location_count(boss_variants: bool) -> int:
@@ -397,8 +512,12 @@ class TestDlcOn(EmberKnightsTestBase):
 
     def test_dlc_skills_weapons_and_orb_relics_are_items_exactly_once(self) -> None:
         pool = [item.name for item in self.multiworld.itempool]
-        for name in [skill.name for skill in CATALOG.dlc_skills] + [weapon.name for weapon in CATALOG.dlc_weapons]:
+        for name in [weapon.name for weapon in CATALOG.dlc_weapons]:
             self.assertEqual(1, pool.count(name), name)
+        # A DLC skill is in the pool exactly once, unless the seed starts with it, in which case it is not.
+        starting_skills = set(self.world.starting_skill_ids)
+        for skill in CATALOG.dlc_skills:
+            self.assertEqual(0 if skill.ability_id in starting_skills else 1, pool.count(skill.name), skill.name)
         # A DLC orb relic is in the pool exactly once, unless the seed starts with it, in which case it is not.
         starting = set(self.world.starting_relic_ids)
         for orb in CATALOG.dlc_relic_orbs:
@@ -682,6 +801,60 @@ class TestNoFillerKindEnabledFallsBackToAsh(EmberKnightsTestBase):
         self.assertGreater(counts["ash"], 0)
         self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
         self.assertEqual("Ash", self.world.get_filler_item_name())
+
+
+class TestTrapEnemiesAnyWorldDefault(EmberKnightsTestBase):
+    options = {}
+
+    def test_off_by_default_and_in_slot_data(self) -> None:
+        self.assertEqual(0, self.world.options.trap_enemies_any_world.value)
+        self.assertIs(False, bool(self.world.fill_slot_data()["trap_enemies_any_world"]))
+
+    def test_the_option_changes_no_items_or_locations(self) -> None:
+        self.assertEqual(228, len(regular_locations(self)))
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestTrapEnemiesAnyWorldOn(EmberKnightsTestBase):
+    options = {"trap_enemies_any_world": True, "traps": True}
+
+    def test_slot_data_carries_the_option(self) -> None:
+        self.assertTrue(self.world.fill_slot_data()["trap_enemies_any_world"])
+        self.assertTrue(self.world.fill_slot_data()["traps"])
+
+    def test_it_does_not_touch_the_pool(self) -> None:
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestTrapEnemiesAnyWorldWithDlc(EmberKnightsTestBase):
+    """The option is independent of the DLC: both are reported, and the client decides what the pool may hold."""
+
+    options = {"trap_enemies_any_world": True, "dlc": True, "traps": True}
+
+    def test_both_flags_reach_the_client(self) -> None:
+        slot_data = self.world.fill_slot_data()
+        self.assertTrue(slot_data["trap_enemies_any_world"])
+        self.assertIs(True, slot_data["dlc"])
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+
+class TestTrapEnemiesAnyWorldWithoutDlc(EmberKnightsTestBase):
+    options = {"trap_enemies_any_world": True, "dlc": False}
+
+    def test_the_dlc_stays_off_so_the_client_excludes_dlc_enemies(self) -> None:
+        slot_data = self.world.fill_slot_data()
+        self.assertTrue(slot_data["trap_enemies_any_world"])
+        self.assertIs(False, slot_data["dlc"])
+
+
+class TestTrapEnemiesAnyWorldOptionContract(unittest.TestCase):
+    def test_it_is_a_toggle_that_defaults_to_off(self) -> None:
+        from Options import Toggle
+
+        from ..options import TrapEnemiesAnyWorld
+
+        self.assertTrue(issubclass(TrapEnemiesAnyWorld, Toggle))
+        self.assertEqual(0, TrapEnemiesAnyWorld.default)
 
 
 class TestGoldIsRetiredButStillKnown(unittest.TestCase):

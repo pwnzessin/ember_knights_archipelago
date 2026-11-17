@@ -7,7 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>EmberKnights.Archipelago</AssemblyName>
     <RootNamespace>EmberKnights.Archipelago</RootNamespace>
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
     <Deterministic>true</Deterministic>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -22,6 +22,8 @@
     <Reference Include="Il2CppInterop.Runtime"><HintPath>..\..\tools\bepinex\BepInEx\core\Il2CppInterop.Runtime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2Cppmscorlib"><HintPath>..\..\tools\interop\assemblies\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>..\..\tools\interop\assemblies\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.ResourceManager"><HintPath>..\..\tools\interop\assemblies\Unity.ResourceManager.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Addressables"><HintPath>..\..\tools\interop\assemblies\Unity.Addressables.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>..\..\tools\interop\assemblies\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>..\..\tools\interop\assemblies\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>

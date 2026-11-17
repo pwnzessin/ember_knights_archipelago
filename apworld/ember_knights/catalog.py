@@ -155,6 +155,9 @@ class Catalog:
         ]
         self.relic_orbs = [RelicOrb(entry["order"], entry["defId"], entry["name"]) for entry in raw["relicOrbs"]]
         self.default_relics = [DefaultRelic(entry["defId"], entry["name"]) for entry in raw["defaultRelics"]]
+        # Common relics with no required category: the ones a relic selector can always offer. Used to make sure a seed's
+        # starting relics are not all ones the selector can rarely show. A set of relic ids (default and orb relics).
+        self.starter_friendly_relics = frozenset(int(def_id) for def_id in raw["starterFriendlyRelics"])
         dlc = raw["dlc"]
         self.dlc_regions: list[str] = list(dlc["regions"])
         self.dlc_skills = [
