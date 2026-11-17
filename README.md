@@ -29,7 +29,7 @@ You need Ember Knights on PC (Steam), and Archipelago **0.6.8 or newer** to gene
 
 That is the whole install. To update, close the game and run `Install.bat` from the newer zip again; your settings and progress are kept. To remove the mod, run `Uninstall.bat` (it keeps BepInEx and your saves), or `Install.bat -Uninstall -RemoveBepInEx` from a Command Prompt to remove BepInEx too.
 
-What the installer changes: it adds BepInEx (`winhttp.dll`, `doorstop_config.ini`, and the `BepInEx` and `dotnet` folders) and `BepInEx/plugins/EmberKnights.Archipelago` to the game folder, and writes `BepInEx/config/com.emberknights.archipelago.cfg`. The BepInEx download is checked against a known SHA-256 before anything is installed. It never touches your save files. The script is plain text; open `Install-EmberKnightsArchipelago.ps1` in Notepad to read exactly what it does.
+What the installer changes: it adds BepInEx (`winhttp.dll`, `doorstop_config.ini`, and the `BepInEx` and `dotnet` folders) and `BepInEx/plugins/EmberKnights.Archipelago` to the game folder, and writes `BepInEx/config/com.emberknights.archipelago.cfg`. On a fresh install that config also gets the standard on-screen settings (the HUD log window on, scale 0.8, held for 10 seconds, 0.4 idle opacity; see [Plugin config](#plugin-config)). The installer only adds a setting that is not in the config yet, so an update never changes a value you already have. The BepInEx download is checked against a known SHA-256 before anything is installed. It never touches your save files. The script is plain text; open `Install-EmberKnightsArchipelago.ps1` in Notepad to read exactly what it does.
 
 If the installer cannot find your game, run it from a Command Prompt with `Install.bat -GamePath "D:\path\to\EmberKnights"`. If the BepInEx download is blocked, download the zip it names yourself and add `-BepInExZip "C:\path\to\that.zip"`.
 
@@ -138,6 +138,8 @@ The file is `BepInEx/config/com.emberknights.archipelago.cfg`. BepInEx creates i
 | `Diagnostics` | `praxis_diagnostics` | `true` | Log what happens after a Praxis Arena Trap (`[PraxisDiag]` lines). |
 
 The `Gameplay` settings are fallbacks for seeds that do not carry the value. For a current seed the YAML decides, and these have no effect.
+
+The defaults in the table are the plugin's own. The installer starts a new config with a different on-screen look: `hud_log_window = true`, `hud_log_scale = 0.8`, `hud_log_hold_seconds = 10` and `hud_log_idle_opacity = 0.4` (the coin icon and title line are on either way). It writes a value only when that setting is missing from the config, so reinstalling or updating never overwrites a setting you have changed. A manual install, which skips the installer, gets the plugin's own defaults.
 
 If you upgrade from an older version, BepInEx leaves settings it no longer knows about in the file. They are harmless, and you can delete them.
 

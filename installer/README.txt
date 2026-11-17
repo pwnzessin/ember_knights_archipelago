@@ -22,10 +22,13 @@ WHAT IT CHANGES
     BepInEx and dotnet folders). The BepInEx download is checked against a known
     SHA-256 before anything is installed.
   - Adds BepInEx\plugins\EmberKnights.Archipelago.
-  - Writes BepInEx\config\com.emberknights.archipelago.cfg.
+  - Writes BepInEx\config\com.emberknights.archipelago.cfg, including the
+    standard on-screen settings (HUD log window on, scale 0.8, held 10 seconds,
+    idle opacity 0.4). It only adds a setting that is not there yet.
   It never touches your save files.
 
-UPDATING   Run Install.bat again. Your settings and progress are kept.
+UPDATING   Run Install.bat again. Your settings and progress are kept: a
+           setting you already have in the config is never changed.
 
 UNINSTALLING
   Uninstall.bat removes the mod and its config and leaves BepInEx and saves.

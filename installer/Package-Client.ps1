@@ -7,7 +7,11 @@ double-clicking Install.bat, or copied straight into the game folder for a manua
 param(
     [Parameter(Mandatory)][string]$PluginDir,
     [Parameter(Mandatory)][string]$Version,
-    [Parameter(Mandatory)][string]$OutDir
+    [Parameter(Mandatory)][string]$OutDir,
+    # Only for a release that changes the installer or docs and ships the plugin DLL unchanged (for example 1.6.1 around the
+    # 1.6.0 DLL). The DLL may then report an OLDER version than the release; a DLL that is NEWER, or from an unrelated version
+    # line, is still refused. Without this switch the DLL must report the version being packaged.
+    [string]$AllowDllVersion
 )
 $ErrorActionPreference = 'Stop'
 $required = 'EmberKnights.Archipelago.dll', 'Archipelago.MultiClient.Net.dll', 'Newtonsoft.Json.dll'
@@ -16,7 +20,15 @@ foreach ($file in $required) {
 }
 
 $dllVersion = (Get-Item -LiteralPath (Join-Path $PluginDir 'EmberKnights.Archipelago.dll')).VersionInfo.ProductVersion
-if ($dllVersion -notlike "$Version*") { throw "The plugin DLL reports version $dllVersion but you asked to package $Version." }
+if ($AllowDllVersion) {
+    # The caller states exactly which DLL version is expected, so a wrong DLL cannot slip through under the switch.
+    if ($dllVersion -notlike "$AllowDllVersion*") { throw "The plugin DLL reports version $dllVersion but -AllowDllVersion says it should be $AllowDllVersion." }
+    if ([version]($AllowDllVersion -replace '[^\d.].*$', '') -gt [version]($Version -replace '[^\d.].*$', '')) {
+        throw "-AllowDllVersion $AllowDllVersion is newer than the release $Version; that is not an installer-only release."
+    }
+    Write-Host "Packaging release $Version around the unchanged plugin DLL $dllVersion."
+}
+elseif ($dllVersion -notlike "$Version*") { throw "The plugin DLL reports version $dllVersion but you asked to package $Version." }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("ek-package-" + [Guid]::NewGuid().ToString('N'))
 $pluginTarget = Join-Path $stage 'BepInEx\plugins\EmberKnights.Archipelago'

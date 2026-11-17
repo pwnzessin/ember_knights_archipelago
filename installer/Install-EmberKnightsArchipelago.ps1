@@ -10,6 +10,8 @@
          its SHA-256 is checked before anything is extracted. Nothing is overwritten if the check fails.
       4. Copies the plugin (the folder next to this script) into BepInEx\plugins.
       5. Writes your connection settings into the plugin's config file, without touching any other setting.
+      6. Adds the standard on-screen settings (HUD log window, title screen line) to the config, but only the ones that
+         are not in it yet. A setting you already have is never changed.
 
     It never touches your save files. BepInEx generates the game-specific files itself the first time you start the
     game (the first start is slow); those are never part of this download.
@@ -281,6 +283,33 @@ function Write-Connection([string]$game) {
     }
 }
 
+# The on-screen defaults a standard install starts with. They are the author's own settings: the HUD log window on (it is
+# off in the plugin itself), a little larger, held on screen longer and faintly visible between messages. They are only
+# ever applied to a setting that is not in the config yet, which is the case for a fresh install, so an update never
+# overwrites a value the player has already set or changed. The plugin's own built-in defaults are unchanged.
+$VisualDefaults = [ordered]@{
+    'archipelago_coin_icon' = 'true'
+    'title_screen_label'    = 'true'
+    'hud_log_window'        = 'true'
+    'hud_log_scale'         = '0.8'
+    'hud_log_hold_seconds'  = '10'
+    'hud_log_idle_opacity'  = '0.4'
+}
+
+function Write-VisualDefaults([string]$game) {
+    $configPath = Get-ConfigPath $game
+    $added = 0
+    foreach ($key in $VisualDefaults.Keys) {
+        # Read-ConfigValue returns $null when the key is absent. Any present value, even one equal to the default or
+        # one the player deliberately changed, is left exactly as it is.
+        if ($null -ne (Read-ConfigValue $configPath 'Visuals' $key)) { continue }
+        Set-ConfigValue $configPath 'Visuals' $key $VisualDefaults[$key]
+        $added++
+    }
+    if ($added -gt 0) { Write-Ok "On-screen settings set up ($added value(s)). Existing settings were left alone." }
+    else { Write-Note 'On-screen settings already present; left as they are.' }
+}
+
 # -------------------------------------------------------------------- uninstall
 
 function Invoke-Uninstall([string]$game) {
@@ -342,6 +371,9 @@ try {
 
     Write-Step 'Connection'
     Write-Connection $GamePath
+
+    Write-Step 'On-screen settings'
+    Write-VisualDefaults $GamePath
 
     Write-Host "`nAll done." -ForegroundColor Green
     Write-Host '  Next:' -ForegroundColor White

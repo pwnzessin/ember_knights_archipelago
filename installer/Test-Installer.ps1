@@ -61,6 +61,15 @@ try {
     Check 'config enables auto_connect' ($c -match '(?m)^auto_connect = true\s*$')
     Check 'save data untouched' ((Get-Content (Join-Path $g1 'EmberKnights_Data\save.dat') -Raw).Trim() -eq 'my save')
     Check 'no temp folder left behind' (-not (Get-ChildItem ([IO.Path]::GetTempPath()) -Directory -Filter 'ek-archipelago-*' -ErrorAction SilentlyContinue))
+    # The standard on-screen settings are written on a fresh install, in the Visuals section.
+    Check 'visuals: HUD log window on' ($c -match '(?m)^hud_log_window = true\s*$')
+    Check 'visuals: HUD scale 0.8' ($c -match '(?m)^hud_log_scale = 0\.8\s*$')
+    Check 'visuals: hold 10 seconds' ($c -match '(?m)^hud_log_hold_seconds = 10\s*$')
+    Check 'visuals: idle opacity 0.4' ($c -match '(?m)^hud_log_idle_opacity = 0\.4\s*$')
+    Check 'visuals: coin icon on' ($c -match '(?m)^archipelago_coin_icon = true\s*$')
+    Check 'visuals: title label on' ($c -match '(?m)^title_screen_label = true\s*$')
+    Check 'visuals: all six sit under one [Visuals] header' ((([regex]::Matches($c, '(?m)^\[Visuals\]\s*$')).Count -eq 1))
+    Check 'connection settings unaffected by the visuals step' (($c -match '(?m)^host = archipelago\.gg\s*$') -and ($c -match '(?m)^slot_name = Tester\s*$'))
 
     Write-Host "`n[2] Re-run: keeps config and extra settings, updates the plugin, does not reinstall BepInEx"
     Add-Content -LiteralPath $cfg -Value "`n[Visuals]`nhud_log_window = true"
@@ -130,6 +139,47 @@ try {
     Check 'winhttp removed' (-not (Test-Path (Join-Path $g1 'winhttp.dll')))
     Check 'game exe kept' (Test-Path (Join-Path $g1 'EmberKnights_64.exe'))
     Check 'save kept' ((Get-Content (Join-Path $g1 'EmberKnights_Data\save.dat') -Raw).Trim() -eq 'my save')
+
+    Write-Host "`n[11] An update never overwrites on-screen settings the player already has"
+    $g11 = New-FakeGame 'visuals-update'
+    $cfg11 = Join-Path $g11 'BepInEx\config\com.emberknights.archipelago.cfg'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $cfg11) | Out-Null
+    # A config from an older version: the player turned the HUD window off, shrank it, and has no title_screen_label key yet.
+    Set-Content -LiteralPath $cfg11 -Value @(
+        '## Settings file was created by plugin Ember Knights Archipelago v1.4.0',
+        '',
+        '[Visuals]',
+        '',
+        '## my own note',
+        'hud_log_window = false',
+        'hud_log_scale = 0.5',
+        'archipelago_coin_icon = false')
+    $r = Run @('-GamePath', $g11, '-NonInteractive', '-BepInExZip', $BepInExZip)
+    Check 'exit code 0' ($r.Code -eq 0) $r.Text
+    $c11 = Get-Content $cfg11 -Raw
+    Check 'player value kept: HUD window still off' ($c11 -match '(?m)^hud_log_window = false\s*$')
+    Check 'player value kept: scale still 0.5' ($c11 -match '(?m)^hud_log_scale = 0\.5\s*$')
+    Check 'player value kept: coin icon still off' ($c11 -match '(?m)^archipelago_coin_icon = false\s*$')
+    Check 'no standard value overwrote them' (-not ($c11 -match '(?m)^hud_log_window = true\s*$') -and -not ($c11 -match '(?m)^hud_log_scale = 0\.8\s*$'))
+    Check 'missing keys were added' (($c11 -match '(?m)^title_screen_label = true\s*$') -and ($c11 -match '(?m)^hud_log_hold_seconds = 10\s*$') -and ($c11 -match '(?m)^hud_log_idle_opacity = 0\.4\s*$'))
+    Check 'comment line kept' ($c11 -match '## my own note')
+    Check 'still exactly one [Visuals] header' ((([regex]::Matches($c11, '(?m)^\[Visuals\]\s*$')).Count -eq 1))
+    # Running it again changes nothing at all.
+    $before11 = Get-Content $cfg11
+    $r = Run @('-GamePath', $g11, '-NonInteractive', '-BepInExZip', $BepInExZip)
+    Check 'second run leaves the config byte-identical' (-not (Compare-Object $before11 (Get-Content $cfg11)))
+    Check 'second run says they are already present' ($r.Text -match 'already present')
+
+    Write-Host "`n[12] A config with no [Visuals] section at all gets the section, and its other sections are untouched"
+    $g12 = New-FakeGame 'visuals-none'
+    $cfg12 = Join-Path $g12 'BepInEx\config\com.emberknights.archipelago.cfg'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $cfg12) | Out-Null
+    Set-Content -LiteralPath $cfg12 -Value @('[Connection]', 'host = example.org', 'port = 38281')
+    $r = Run @('-GamePath', $g12, '-NonInteractive', '-BepInExZip', $BepInExZip)
+    $c12 = Get-Content $cfg12 -Raw
+    Check 'exit code 0' ($r.Code -eq 0) $r.Text
+    Check 'connection section untouched' (($c12 -match '(?m)^host = example\.org\s*$') -and ($c12 -match '(?m)^port = 38281\s*$'))
+    Check 'a [Visuals] section was added with all six values' ((([regex]::Matches($c12, '(?m)^\[Visuals\]\s*$')).Count -eq 1) -and ($c12 -match '(?m)^hud_log_window = true\s*$') -and ($c12 -match '(?m)^hud_log_idle_opacity = 0\.4\s*$') -and ($c12 -match '(?m)^archipelago_coin_icon = true\s*$'))
 
     Write-Host "`n[10] Paths with spaces and the .bat launcher"
     $g10 = New-FakeGame 'path with spaces'
