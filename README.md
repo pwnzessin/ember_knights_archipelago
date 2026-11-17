@@ -86,11 +86,11 @@ These go in your player YAML under `Ember Knights:`. Defaults are in brackets.
 
 | Option | Values | What it does |
 | --- | --- | --- |
-| `goal` | `praxis` [default], `arch_praxis` | The boss that completes your world. |
+| `goal` | `praxis` [default], `arch_praxis` | The boss that completes your world. Defeating Arch Praxis also completes a `praxis` goal, because at heat 15 or more the game only offers Arch Praxis. `arch_praxis` needs Arch Praxis itself. |
 | `dlc` | on / off [default] | Include the Wrath of the Architect DLC: its four altered worlds and the Architect level, their minibosses and bosses, ten skill tablets, nineteen Hyper Gloves and Ember Buster weapon mods, ten more relic orbs and room milestones as checks, with the new skills, weapons and relics as items. **You must own the DLC.** See [DLC support](#dlc-support). |
 | `boss_variants` | on [default] / off | Include checks for alternate minibosses and world bosses. |
 | `start_heat` | 0-55 [25] | Starting difficulty in the game's modifier points. |
-| `minimum_heat` | 0-55 [15] | Floor that Heat Reduction items cannot go below. 15 is required for the Arch Praxis fight. |
+| `minimum_heat` | 0-55 [15] | Floor that Heat Reduction items cannot go below. 15 is required for the Arch Praxis fight. At heat 15 or more the normal Praxis fight never appears, so with the `praxis` goal the seed is finished by defeating Arch Praxis; generation logs a warning for that combination (the default options trigger it). Set it below 15 to be able to face the normal Praxis. |
 | `heat_reduction_per_item` | 1-15 [1] | Heat points each Heat Reduction item removes. |
 | `heat_mode` | `random_assortment` [default], `sequential`, `curated_heat_difficulty` | How the difficulty modifiers are chosen and reduced. `curated_heat_difficulty` sorts them into five tiers so low heat only ever holds the mildest modifiers. |
 | `heat_reroll` | `every_run` [default], `once` | Whether the random assortment is rolled again each run or once per seed. |

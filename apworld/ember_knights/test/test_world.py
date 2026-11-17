@@ -341,6 +341,80 @@ class TestStartingRelicsTightestPool(EmberKnightsTestBase):
         self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
 
 
+class TestPraxisGoalNote(unittest.TestCase):
+    """The warning for a Praxis goal that can only be finished through Arch Praxis. It is a pure function of three numbers."""
+
+    def note(self, goal_is_praxis: bool, minimum: int, start: int):
+        from .. import praxis_goal_is_unreachable_note
+
+        return praxis_goal_is_unreachable_note(goal_is_praxis, minimum, start)
+
+    def test_the_reported_case_warns(self) -> None:
+        # Goal Praxis, minimum heat 15, start heat 15 (the values from the run that could not finish).
+        text = self.note(True, 15, 15)
+        self.assertIsNotNone(text)
+        self.assertIn("Arch Praxis", text)
+        self.assertIn("15", text)
+        self.assertIn("completes a Praxis goal", text)
+
+    def test_the_default_options_warn(self) -> None:
+        # minimum_heat defaults to 15 and start_heat to 25: the lowest heat is 15, so a default Praxis seed gets the note.
+        self.assertIsNotNone(self.note(True, 15, 25))
+
+    def test_a_minimum_below_the_threshold_does_not_warn(self) -> None:
+        self.assertIsNone(self.note(True, 14, 25))
+        self.assertIsNone(self.note(True, 0, 25))
+
+    def test_a_start_heat_below_the_threshold_does_not_warn(self) -> None:
+        # The active heat never goes above the start heat, so a low start heat makes the normal fight reachable.
+        self.assertIsNone(self.note(True, 15, 10))
+        self.assertIsNone(self.note(True, 40, 14))
+
+    def test_the_threshold_is_exactly_fifteen(self) -> None:
+        self.assertIsNone(self.note(True, 14, 14))
+        self.assertIsNotNone(self.note(True, 15, 15))
+        self.assertIsNotNone(self.note(True, 16, 16))
+
+    def test_the_arch_praxis_goal_never_warns(self) -> None:
+        for minimum, start in ((15, 15), (15, 25), (0, 0), (55, 55)):
+            self.assertIsNone(self.note(False, minimum, start))
+
+    def test_the_numbers_in_the_text_are_the_real_ones(self) -> None:
+        text = self.note(True, 20, 30)
+        self.assertIn("Minimum Heat 20", text)
+        self.assertIn("Start Heat 30", text)
+        self.assertIn("the lowest heat this seed can ever have is 20", text)
+
+    def test_the_constant_matches_the_documented_threshold(self) -> None:
+        from .. import ARCH_PRAXIS_HEAT
+        from ..options import MinimumHeat
+
+        self.assertEqual(15, ARCH_PRAXIS_HEAT)
+        self.assertEqual(ARCH_PRAXIS_HEAT, MinimumHeat.default)
+
+
+class TestPraxisGoalWorldWarns(EmberKnightsTestBase):
+    """A real generation with a Praxis goal and minimum heat 15 still works and still logs the warning."""
+
+    options = {"goal": "praxis", "minimum_heat": 15, "start_heat": 15}
+
+    def test_generation_succeeds_and_slot_data_keeps_the_praxis_goal(self) -> None:
+        slot_data = self.world.fill_slot_data()
+        self.assertEqual("praxis", slot_data["goal"])
+        self.assertEqual(15, slot_data["minimum_heat"])
+        self.assertEqual(len(regular_locations(self)), len(self.multiworld.itempool))
+
+    def test_the_seed_is_still_beatable(self) -> None:
+        # The victory event sits in Netherra for a Praxis goal; the goal must still be completable with every item.
+        self.assertTrue(self.multiworld.can_beat_game(self.multiworld.get_all_state(False)))
+
+
+class TestArchPraxisGoalWorld(EmberKnightsTestBase):
+    options = {"goal": "arch_praxis", "minimum_heat": 15, "start_heat": 15}
+
+    def test_the_goal_is_unchanged(self) -> None:
+        self.assertEqual("arch_praxis", self.world.fill_slot_data()["goal"])
+
 class TestStarterFriendlyRelicsDefault(EmberKnightsTestBase):
     options = {}
 

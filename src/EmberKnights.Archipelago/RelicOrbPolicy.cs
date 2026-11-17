@@ -199,6 +199,32 @@ internal static class FirstShopPolicy
 }
 
 /// <summary>
+/// Which seed goals a defeated Praxis fight completes. Praxis has two versions: the normal fight, and Arch Praxis, the harder
+/// one that only appears once the run's heat is at the Doom threshold (15). A seed with minimum heat 15 or higher therefore
+/// never offers the normal fight, so a "Praxis" goal could not be finished at all. Arch Praxis is the same boss at a harder
+/// setting, so beating it also completes a Praxis goal; the Arch Praxis goal still needs Arch Praxis itself. Pure logic with
+/// no game dependencies.
+/// </summary>
+internal static class GoalPolicy
+{
+    public const string Praxis = "praxis";
+    public const string ArchPraxis = "arch_praxis";
+
+    /// <summary>
+    /// Whether defeating the fight named by <paramref name="defeated"/> completes the seed's <paramref name="goal"/>. An unknown
+    /// goal or fight never completes anything, so a bad value cannot report a goal that was not reached.
+    /// </summary>
+    public static bool Completes(string? defeated, string? goal) => (defeated, goal) switch
+    {
+        (Praxis, Praxis) => true,
+        (ArchPraxis, ArchPraxis) => true,
+        // The harder fight also satisfies the easier goal. The reverse never holds.
+        (ArchPraxis, Praxis) => true,
+        _ => false,
+    };
+}
+
+/// <summary>
 /// The relic selector ("pick one of three") rolls each card's rarity from a table that is about 84% Common, then picks a
 /// relic of that rarity the player may be offered. A player who owns few relics, as with a seed that starts with a handful
 /// drawn from the whole pool, can run out of Commons and see one or two cards. This tops a short selector back up to three

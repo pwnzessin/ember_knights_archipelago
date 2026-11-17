@@ -542,7 +542,8 @@ public sealed class ConnectionService
         if (encounter is null)
             return;
         CheckLocation(GameCatalog.Data.LocationForBoss(encounter));
-        if (Goal == goal && state is not null)
+        // Arch Praxis also completes a Praxis goal: with minimum heat 15 or higher only the Arch Praxis fight is ever offered.
+        if (GoalPolicy.Completes(goal, Goal) && state is not null)
         {
             state.GoalPending = true;
             SaveState();

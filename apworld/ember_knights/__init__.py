@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from BaseClasses import Item, ItemClassification, Location, Region
@@ -6,6 +7,32 @@ from worlds.AutoWorld import World
 
 from .catalog import CATALOG
 from .options import EmberKnightsOptions, Goal, HeatMode, HeatReroll
+
+
+# The heat at and above which the game only offers the Arch Praxis fight (the Doom difficulty threshold). The client holds the
+# active heat at the seed's minimum heat, so a seed whose minimum is this high never gets the normal Praxis fight.
+ARCH_PRAXIS_HEAT = 15
+
+
+def praxis_goal_is_unreachable_note(goal_is_praxis: bool, minimum_heat: int, start_heat: int) -> str | None:
+    """Returns a warning when a Praxis goal can only be finished through Arch Praxis, or None when it needs no warning.
+
+    The active heat never goes below the minimum heat, and never above the start heat, so the heat the player can ever have is
+    at least min(start, minimum) and the normal Praxis fight needs the heat to be able to drop below the Arch Praxis threshold.
+    Reaching the goal still works: the client counts a defeated Arch Praxis as completing a Praxis goal. The note exists so the
+    player is not surprised that the easier fight never appears.
+    """
+    if not goal_is_praxis:
+        return None
+    lowest_possible_heat = min(int(start_heat), int(minimum_heat))
+    if lowest_possible_heat < ARCH_PRAXIS_HEAT:
+        return None
+    return (
+        f"Goal is Praxis, but the lowest heat this seed can ever have is {lowest_possible_heat} (Minimum Heat {minimum_heat}, "
+        f"Start Heat {start_heat}). At heat {ARCH_PRAXIS_HEAT} or more the game only offers the Arch Praxis fight, so the normal "
+        f"Praxis fight will never appear. Defeating Arch Praxis completes a Praxis goal, so the seed stays winnable. Lower "
+        f"Minimum Heat below {ARCH_PRAXIS_HEAT} (and Start Heat with it) to be able to face the normal Praxis."
+    )
 
 
 class EmberKnightsItem(Item):
@@ -114,6 +141,12 @@ class EmberKnightsWorld(World):
 
     def generate_early(self) -> None:
         self.dlc_enabled = bool(self.options.dlc)
+        note = praxis_goal_is_unreachable_note(
+            self.options.goal == Goal.option_praxis, int(self.options.minimum_heat), int(self.options.start_heat)
+        )
+        if note:
+            # A warning, not an error: the seed is still winnable because Arch Praxis completes a Praxis goal.
+            logging.warning("Ember Knights (%s): %s", self.player_name, note)
         extra_count = max(0, min(len(CATALOG.weapons), int(self.options.extra_starting_weapons)))
         chosen = self.random.sample(CATALOG.weapons, extra_count)
         self.starting_weapon_ids = [1, *sorted(weapon.weapon_id for weapon in chosen)]
@@ -417,5 +450,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.6.0"
+        slot_data["mod_version"] = "1.6.2"
         return slot_data

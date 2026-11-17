@@ -2701,3 +2701,71 @@ public class StartingSkillPolicyTests
         Assert.False(StartingSkillPolicy.IsControlled(false, false, false, false, mode));
     }
 }
+public class GoalPolicyTests
+{
+    [Fact]
+    public void ThePraxisFightCompletesAPraxisGoal()
+    {
+        Assert.True(GoalPolicy.Completes("praxis", "praxis"));
+    }
+
+    [Fact]
+    public void ArchPraxisCompletesAnArchPraxisGoal()
+    {
+        Assert.True(GoalPolicy.Completes("arch_praxis", "arch_praxis"));
+    }
+
+    [Fact]
+    public void ArchPraxisAlsoCompletesAPraxisGoalBecauseHeat15OnlyOffersThatFight()
+    {
+        // The reported case: goal praxis with minimum heat 15, where the normal Praxis fight never spawns.
+        Assert.True(GoalPolicy.Completes("arch_praxis", "praxis"));
+    }
+
+    [Fact]
+    public void TheNormalPraxisFightNeverCompletesAnArchPraxisGoal()
+    {
+        // The easier fight must not finish the harder goal.
+        Assert.False(GoalPolicy.Completes("praxis", "arch_praxis"));
+    }
+
+    [Theory]
+    [InlineData(null, "praxis")]
+    [InlineData("praxis", null)]
+    [InlineData(null, null)]
+    [InlineData("", "praxis")]
+    [InlineData("praxis", "")]
+    [InlineData("architect", "praxis")]
+    [InlineData("arch_praxis", "architect")]
+    [InlineData("Praxis", "praxis")]
+    [InlineData("PRAXIS", "praxis")]
+    [InlineData("arch_praxis ", "praxis")]
+    public void AnythingUnknownCompletesNothing(string? defeated, string? goal)
+    {
+        Assert.False(GoalPolicy.Completes(defeated, goal));
+    }
+
+    [Fact]
+    public void TheConstantsMatchTheSlotDataValuesAndTheCatalogGoals()
+    {
+        // The apworld writes slot_data["goal"] as one of these two strings, and the catalog names its final bosses with them.
+        Assert.Equal("praxis", GoalPolicy.Praxis);
+        Assert.Equal("arch_praxis", GoalPolicy.ArchPraxis);
+        Assert.NotNull(GameCatalog.Data.FinalBoss(GoalPolicy.Praxis));
+        Assert.NotNull(GameCatalog.Data.FinalBoss(GoalPolicy.ArchPraxis));
+    }
+
+    [Fact]
+    public void EveryCombinationOfTheTwoRealGoalsIsDecidedAsDocumented()
+    {
+        var expected = new Dictionary<(string, string), bool>
+        {
+            [("praxis", "praxis")] = true,
+            [("praxis", "arch_praxis")] = false,
+            [("arch_praxis", "praxis")] = true,
+            [("arch_praxis", "arch_praxis")] = true,
+        };
+        foreach (var ((defeated, goal), completes) in expected)
+            Assert.Equal(completes, GoalPolicy.Completes(defeated, goal));
+    }
+}

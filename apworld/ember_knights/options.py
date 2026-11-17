@@ -4,7 +4,11 @@ from Options import Choice, DefaultOnToggle, PerGameCommonOptions, Range, Toggle
 
 
 class Goal(Choice):
-    """Select the final boss that completes this world."""
+    """Select the final boss that completes this world.
+
+    Praxis is completed by defeating Praxis, or Arch Praxis (the harder version, which is the only one the game offers at
+    heat 15 or more). Arch Praxis is completed only by defeating Arch Praxis.
+    """
 
     display_name = "Goal"
     option_praxis = 0
@@ -50,6 +54,10 @@ class MinimumHeat(Range):
 
     15 is the Doom difficulty threshold required for the Arch Praxis fight. If Start Heat is set
     lower than Minimum Heat, the active heat stays at Start Heat.
+
+    At heat 15 or more the game only offers the Arch Praxis fight, never the normal Praxis. With the Praxis goal and a
+    Minimum Heat (and Start Heat) of 15 or higher, defeating Arch Praxis therefore completes the goal. Generation logs a
+    warning for that combination so it is not a surprise. Set Minimum Heat below 15 to be able to face the normal Praxis.
     """
 
     display_name = "Minimum Heat"
