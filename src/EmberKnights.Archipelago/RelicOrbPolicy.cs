@@ -1,7 +1,63 @@
-namespace EmberKnights.Archipelago;
+﻿namespace EmberKnights.Archipelago;
 
 /// <summary>What Esper's reveal should show for one orb: a real relic from this game, or text for anything else.</summary>
 internal readonly record struct OrbReveal(int? RelicDefId, string? Text);
+
+/// <summary>
+/// Decides when a relic orb counts as collected, from the game's own run-level "orbs collected" list.
+///
+/// The game calls <c>XGameState.AddUnknownRelicCollected(relicDefId)</c> twice for every orb, and the live log shows it
+/// is the same for an orb picked up by hand and for one left on the ground and pulled in by the room-clear sequence:
+/// <list type="number">
+/// <item>When the orb is spawned (room state <c>NewBattleRoomSpawning</c>), the relic is added to the list and the call
+/// returns <c>true</c>. The player has not touched the orb yet.</item>
+/// <item>When the player takes it (room state <c>Complete</c> for a manual pickup, <c>CollectImportantItems</c> for the
+/// pull-in), the relic is already in the list and the call returns <c>false</c>.</item>
+/// </list>
+/// Only the second call is a pickup. The manual-pickup method (<c>PlayerUtils.PickupUnknownRelicDrop</c>) never runs for
+/// the pull-in, which is why a check hooked there was missed for an orb left on the ground.
+///
+/// The tracker does not rely on the return value alone. It remembers which relic ids it has seen spawn, so a second call
+/// for an id it saw spawn is a pickup, and a call for an id it never saw spawn (a mid-room hook, a reconnect, a save
+/// loaded with the orb already on the floor) is still counted once instead of being lost.
+/// </summary>
+internal sealed class OrbCollectionTracker
+{
+    private readonly HashSet<int> spawned = new();
+    private readonly HashSet<int> collected = new();
+
+    /// <summary>
+    /// Feeds one <c>AddUnknownRelicCollected</c> call. Returns true exactly once per orb, on the call that is the pickup.
+    /// </summary>
+    /// <param name="relicDefId">The relic inside the orb; unique per orb location.</param>
+    /// <param name="gameAddedIt">The call's return value: true when the relic was newly added to the game's list.</param>
+    public bool IsPickup(int relicDefId, bool gameAddedIt)
+    {
+        // The game's own list is the first sighting: an orb that was just added has been spawned, not taken.
+        if (gameAddedIt)
+        {
+            spawned.Add(relicDefId);
+            // A relic added again after it was already collected is a new orb with the same id (a new run reuses the
+            // ids), so it is allowed to be collected again.
+            collected.Remove(relicDefId);
+            return false;
+        }
+
+        // Already counted: the same orb must never send a second check.
+        if (!collected.Add(relicDefId))
+            return false;
+
+        spawned.Remove(relicDefId);
+        return true;
+    }
+
+    /// <summary>Forgets everything, for a new run or a new connection.</summary>
+    public void Reset()
+    {
+        spawned.Clear();
+        collected.Clear();
+    }
+}
 
 /// <summary>Pure decisions about relic orbs. No game dependencies.</summary>
 internal static class RelicOrbPolicy

@@ -184,6 +184,7 @@ public sealed class ConnectionService
         receivedRelicOrder.Clear();
         scoutedItems.Clear();
         roomProgress.Reset();
+        RelicOrbPickupPatch.Reset();
         wasInRunWorld = false;
         StartHeat = 0;
         MinimumHeat = 0;
@@ -428,11 +429,15 @@ public sealed class ConnectionService
             ? new ScoutedItem { ItemName = item.ItemName, PlayerName = item.PlayerName, IsOwnPlayer = item.IsOwnPlayer }
             : null;
 
-    /// <summary>True once the location has been reported to the server (or the server already had it).</summary>
+    /// <summary>
+    /// True once the location has been reported, so a tooltip can read "(sent)". A check that is queued and waiting for
+    /// the server counts as sent too: it has been recorded and is delivered on the next flush, and the tooltip is redrawn
+    /// right after a purchase, before the server's confirmation arrives.
+    /// </summary>
     public bool IsLocationSent(long locationId)
     {
         if (pendingChecks.Contains(locationId))
-            return false;
+            return true;
         try
         {
             return IsConnected && session is not null && session.Locations.AllLocationsChecked.Contains(locationId);
@@ -557,6 +562,18 @@ public sealed class ConnectionService
             CheckLocation(locationId);
     }
 
+    /// <summary>
+    /// Reports the check of an Ember Tree node the player just bought. Called from the game's purchase method, so it
+    /// is a purchase by definition: no baseline decides it. A node bought while the mod was not connected is not
+    /// reported here; the once-a-second scan catches those up (see <see cref="ScanSaveUnlocksNow"/>).
+    /// </summary>
+    public void ReportEmberTreePurchase(int defId)
+    {
+        if (!IsActive || state is null)
+            return;
+        CheckEmberTreeNode(defId);
+    }
+
     public void CheckWeaponMod(int defId)
     {
         if (GameCatalog.Data.LocationForWeaponMod(defId) is { } locationId)
@@ -651,6 +668,25 @@ public sealed class ConnectionService
         if (Time.realtimeSinceStartup < nextProgressionScanAt)
             return;
         nextProgressionScanAt = Time.realtimeSinceStartup + 1f;
+        ScanSaveUnlocksNow();
+    }
+
+    /// <summary>
+    /// Runs the unlock scan right now instead of waiting for the next once-a-second tick. The game calls this after an
+    /// Ember Tree purchase so the check is recorded before the tooltip is redrawn, which keeps the "(sent)" mark in step
+    /// with what the player just bought. It is the same scan, so the baseline rules still apply.
+    /// </summary>
+    public void ScanUnlocksAfterPurchase()
+    {
+        if (!IsConnected || !IsActive || state is null)
+            return;
+        nextProgressionScanAt = Time.realtimeSinceStartup + 1f;
+        ScanSaveUnlocksNow();
+        FlushPendingChecks();
+    }
+
+    private void ScanSaveUnlocksNow()
+    {
 
         try
         {
@@ -670,11 +706,17 @@ public sealed class ConnectionService
             if (ArchipelagoPlugin.Instance.CoinIconEnabled.Value)
                 CoinIconPatcher.TryApply();
 
+            // Ember Tree nodes are judged by purchase, not by "unlocked": the game gives Thick Skin and Slayer away
+            // unlocked at level 0, so only a node with at least one paid level counts as bought.
+            var nodeStates = new Dictionary<int, (bool Unlocked, int Levels)>();
             var unlockedNodes = new List<int>();
             foreach (var node in GameCatalog.Data.EmberTree)
             {
                 var data = saveSlot.GetEmberTreeUpgradeData(node.DefId);
-                if (data is not null && data.Unlocked)
+                if (data is null)
+                    continue;
+                nodeStates[node.DefId] = (data.Unlocked, data.Level);
+                if (data.Unlocked)
                     unlockedNodes.Add(node.DefId);
             }
             var unlockedMods = new List<int>();
@@ -701,12 +743,28 @@ public sealed class ConnectionService
             if (state is not null && !state.BaselineTaken && !state.BaselineSkipped)
             {
                 state.BaselineEmberTree = UnlockBaseline.TakeBaseline(unlockedNodes).OrderBy(id => id).ToList();
+                state.BaselineEmberTreeLevels = UnlockBaseline.TakeEmberTreeBaseline(
+                    nodeStates.Select(node => new KeyValuePair<int, (bool Unlocked, int Levels)>(node.Key, node.Value)));
+                state.EmberTreeLevelBaselineTaken = true;
                 state.BaselineWeaponMods = UnlockBaseline.TakeBaseline(unlockedMods).OrderBy(id => id).ToList();
                 state.BaselineTaken = true;
                 SaveState();
+                var freeNodes = unlockedNodes.Count - state.BaselineEmberTreeLevels.Count;
                 ArchipelagoPlugin.LogSource.LogInfo(
-                    $"New seed: {state.BaselineEmberTree.Count} Ember Tree node(s) and {state.BaselineWeaponMods.Count} " +
-                    "weapon mod(s) were already unlocked and are not checks.");
+                    $"New seed: {state.BaselineWeaponMods.Count} weapon mod(s) were already unlocked and are not checks. " +
+                    $"Ember Tree nodes are sent when bought ({unlockedNodes.Count} node(s) were already unlocked at connect, " +
+                    $"{state.BaselineEmberTreeLevels.Count} of them with a bought level; {freeNodes} unlocked for free).");
+            }
+            else if (state is not null && state.BaselineTaken && !state.EmberTreeLevelBaselineTaken)
+            {
+                // A seed whose baseline was written by an older version holds Thick Skin and Slayer as "already
+                // unlocked". Convert it: nodes bought so far stay excluded, nodes still at level 0 are checks again.
+                state.BaselineEmberTreeLevels = UnlockBaseline.MigrateEmberTreeBaseline(state.BaselineEmberTree, nodeStates);
+                state.EmberTreeLevelBaselineTaken = true;
+                SaveState();
+                ArchipelagoPlugin.LogSource.LogInfo(
+                    $"Migrated the Ember Tree baseline: {state.BaselineEmberTreeLevels.Count} bought node(s) stay excluded; " +
+                    "free level-0 nodes are checks once bought.");
             }
 
             // A DLC weapon mod the player already owns when a DLC seed first connects is not a check, just like the
@@ -722,13 +780,10 @@ public sealed class ConnectionService
                     $"New DLC seed: {state.BaselineDlcWeaponMods.Count} DLC weapon mod(s) were already unlocked and are not checks.");
             }
 
-            var baselineNodes = new HashSet<int>(state?.BaselineEmberTree ?? new List<int>());
+            // Ember Tree nodes are no longer decided here. Each purchase is reported by EmberTreePurchaseScanPatch, which
+            // runs inside the game's own purchase call, so a node cannot be swallowed by a baseline that was taken after
+            // the player had already bought it. The baseline above is kept only for weapon mods.
             var baselineMods = new HashSet<int>(state?.BaselineWeaponMods ?? new List<int>());
-            foreach (var id in unlockedNodes)
-            {
-                if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineNodes))
-                    CheckEmberTreeNode(id);
-            }
             foreach (var id in unlockedMods)
             {
                 if (UnlockBaseline.ShouldReport(id, unlockedNow: true, baselineMods))
@@ -823,11 +878,10 @@ public sealed class ConnectionService
             if (string.IsNullOrEmpty(seed))
                 throw new InvalidDataException("The server did not provide a seed name.");
 
-            var loadedState = stateStore.Load(slotName);
-            if (!string.Equals(loadedState.Seed, seed, StringComparison.Ordinal))
-                loadedState = new SessionState { SlotName = slotName, Seed = seed };
-            loadedState.SlotName = slotName;
-            loadedState.Seed = seed;
+            // One state file per multiworld session (seed, team, slot), the same identity the reference client uses.
+            // A different room with the same slot name gets its own file, and the host and port are not part of it,
+            // so a room that moves to a new port resumes where it left off.
+            var loadedState = stateStore.Load(seed, success.Team, slotName);
             // A seed that ran before the baseline existed has already reported what it was going to. Giving it a
             // baseline now could hide a node the player bought but has not been credited for, so it is left alone.
             if (!loadedState.BaselineTaken && !loadedState.BaselineSkipped &&
@@ -839,6 +893,10 @@ public sealed class ConnectionService
                     "is still reported as a check.");
             }
             state = loadedState;
+            ArchipelagoPlugin.LogSource.LogInfo(
+                $"Session state: seed {seed}, team {success.Team}, slot '{slotName}' -> " +
+                $"{Path.GetFileName(stateStore.GetPath(seed, success.Team, slotName))} " +
+                $"(items received so far: {loadedState.NextItemIndex}, baseline taken: {loadedState.BaselineTaken}).");
 
             pendingChecks.Clear();
             pendingChecks.UnionWith(state.PendingChecks);
@@ -864,6 +922,7 @@ public sealed class ConnectionService
             // time the game restarts. Use a stable hash so the same seed always yields the same assortment.
             heatRunSeed = HeatSolver.StableHash(seed) ^ 0x45D9F3B;
             wasInRunWorld = false;
+            RelicOrbPickupPatch.Reset();
             StartingArchipelagoCoins = Math.Clamp(
                 ReadSlotInt(success.SlotData, "starting_archipelago_coins", plugin.StartingArchipelagoCoins.Value),
                 1,

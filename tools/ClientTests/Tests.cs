@@ -679,6 +679,81 @@ public class RelicOrbPolicyTests
 
     private static readonly CatalogData Catalog = GameCatalog.Data;
 }
+public class OrbCollectionTrackerTests
+{
+    // Observed in the live log, for both a manual pickup and an orb left on the ground: the game calls
+    // AddUnknownRelicCollected once at spawn (returns true) and once when the player takes the orb (returns false).
+
+    [Fact]
+    public void SpawnIsNotAPickupButTheSecondCallIs()
+    {
+        var tracker = new OrbCollectionTracker();
+        Assert.False(tracker.IsPickup(48, gameAddedIt: true));
+        Assert.True(tracker.IsPickup(48, gameAddedIt: false));
+    }
+
+    [Fact]
+    public void AnOrbLeftOnTheGroundIsCountedTheSameAsOnePickedUpByHand()
+    {
+        // Relic 212 in the live log: spawned (true), pulled in by the room-clear sequence (false), no manual pickup.
+        var tracker = new OrbCollectionTracker();
+        Assert.False(tracker.IsPickup(212, true));
+        Assert.True(tracker.IsPickup(212, false));
+    }
+
+    [Fact]
+    public void AnOrbNeverSendsASecondCheck()
+    {
+        var tracker = new OrbCollectionTracker();
+        tracker.IsPickup(48, true);
+        Assert.True(tracker.IsPickup(48, false));
+        Assert.False(tracker.IsPickup(48, false));
+        Assert.False(tracker.IsPickup(48, false));
+    }
+
+    [Fact]
+    public void AnOrbSeenOnlyAtPickupStillCountsOnce()
+    {
+        // The spawn call was missed (hook installed mid-room, reconnect, orb already on the floor in a loaded save).
+        var tracker = new OrbCollectionTracker();
+        Assert.True(tracker.IsPickup(40, gameAddedIt: false));
+        Assert.False(tracker.IsPickup(40, gameAddedIt: false));
+    }
+
+    [Fact]
+    public void SeveralOrbsInOneRoomAreTrackedIndependently()
+    {
+        // Relics 48 (base) and 211 (DLC) spawn together and are taken in either order.
+        var tracker = new OrbCollectionTracker();
+        Assert.False(tracker.IsPickup(48, true));
+        Assert.False(tracker.IsPickup(211, true));
+        Assert.True(tracker.IsPickup(211, false));
+        Assert.True(tracker.IsPickup(48, false));
+        Assert.False(tracker.IsPickup(211, false));
+    }
+
+    [Fact]
+    public void ARelicThatSpawnsAgainAfterBeingCollectedCanBeCollectedAgain()
+    {
+        // A new run reuses the relic ids; the game adds the id to its fresh list again (true), then it is taken (false).
+        var tracker = new OrbCollectionTracker();
+        tracker.IsPickup(48, true);
+        Assert.True(tracker.IsPickup(48, false));
+        Assert.False(tracker.IsPickup(48, true));
+        Assert.True(tracker.IsPickup(48, false));
+    }
+
+    [Fact]
+    public void ResetForgetsEverything()
+    {
+        var tracker = new OrbCollectionTracker();
+        tracker.IsPickup(48, true);
+        tracker.IsPickup(48, false);
+        tracker.Reset();
+        Assert.True(tracker.IsPickup(48, false));
+    }
+}
+
 public class RelicRevealTests
 {
     private static readonly CatalogData Catalog = GameCatalog.Data;
@@ -943,6 +1018,24 @@ public class UpgradeTooltipTests
     {
         Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(true, 1, 50, Thresholds));
         Assert.False(UpgradeTooltip.CanUnlockEmberTreeNode(true, 10, 200, Thresholds));
+    }
+
+    [Theory]
+    [InlineData(false, false, false)] // locked and never sent: stays hidden
+    [InlineData(false, true, true)]   // can be bought now: show what it holds
+    [InlineData(true, false, true)]   // bought and sent: still shows the item with "(sent)"
+    [InlineData(true, true, true)]
+    public void TheEmberTreeLineShowsWhileBuyableAndAfterTheCheckWasSent(bool sent, bool canUnlock, bool expected)
+    {
+        Assert.Equal(expected, UpgradeTooltip.ShouldShowEmberTreeLine(sent, canUnlock));
+    }
+
+    [Fact]
+    public void ABoughtNodeWhoseCheckWasSentKeepsItsSentLine()
+    {
+        var shown = UpgradeTooltip.ShouldShowEmberTreeLine(checkSent: true, canUnlockNow: false);
+        Assert.True(shown);
+        Assert.Contains("(sent)", UpgradeTooltip.Format("Ember Tree: Thick Skin", Mine("Cyclone"), alreadyChecked: true));
     }
 
     [Fact]
@@ -1520,6 +1613,153 @@ public class UnlockBaselineTests
         Assert.Equal(FreshSaveNodes.OrderBy(id => id), baseline.OrderBy(id => id));
     }
 
+    // Thick Skin (1) and Slayer (10) come unlocked at level 0 on a fresh save; the rest start locked.
+    private static readonly Dictionary<int, (bool Unlocked, int Levels)> FreshTree = new()
+    {
+        [1] = (true, 0),
+        [2] = (false, 0),
+        [10] = (true, 0),
+        [12] = (false, 0),
+    };
+
+    [Fact]
+    public void AFreeLevelZeroNodeIsNotConsideredBought()
+    {
+        Assert.False(UnlockBaseline.IsEmberTreeNodePurchased(unlocked: true, upgradeLevels: 0));
+        Assert.False(UnlockBaseline.IsEmberTreeNodePurchased(unlocked: false, upgradeLevels: 0));
+        Assert.True(UnlockBaseline.IsEmberTreeNodePurchased(unlocked: true, upgradeLevels: 1));
+    }
+
+    [Fact]
+    public void TheFreshTreeBaselineLeavesThickSkinAndSlayerOut()
+    {
+        var baseline = UnlockBaseline.TakeEmberTreeBaseline(FreshTree);
+        Assert.Empty(baseline);
+    }
+
+    [Fact]
+    public void BuyingTheFirstLevelOfThickSkinAndSlayerIsReported()
+    {
+        var baseline = UnlockBaseline.TakeEmberTreeBaseline(FreshTree);
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 0, baseline));
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(10, true, 0, baseline));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 1, baseline));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(10, true, 1, baseline));
+    }
+
+    [Fact]
+    public void ANodeThatStartsLockedIsReportedWhenBoughtLikeBefore()
+    {
+        var baseline = UnlockBaseline.TakeEmberTreeBaseline(FreshTree);
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(2, false, 0, baseline));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(2, true, 1, baseline));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(12, true, 1, baseline));
+    }
+
+    [Fact]
+    public void ALevelAlreadyBoughtWhenTheSeedStartedIsNeverReported()
+    {
+        var reusedSave = new Dictionary<int, (bool Unlocked, int Levels)>
+        {
+            [1] = (true, 2),
+            [2] = (true, 1),
+            [10] = (true, 0),
+        };
+        var baseline = UnlockBaseline.TakeEmberTreeBaseline(reusedSave);
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 2, baseline));
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(2, true, 1, baseline));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(10, true, 1, baseline));
+    }
+
+    [Fact]
+    public void ABoughtNodeIsStillReportedOnceItsBaselineWasTaken()
+    {
+        var baseline = UnlockBaseline.TakeEmberTreeBaseline(FreshTree);
+        var reported = new[] { 1, 2, 10, 12 }
+            .Where(id => UnlockBaseline.ShouldReportEmberTreeNode(id, true, 1, baseline))
+            .ToList();
+        Assert.Equal(new[] { 1, 2, 10, 12 }, reported);
+    }
+
+    [Fact]
+    public void MigratingTheOldBaselineFreesThickSkinAndSlayerWhileTheyAreUnbought()
+    {
+        // The old baseline listed every node that was merely unlocked, so it held 1 and 10 and the node bought since (2).
+        var current = new Dictionary<int, (bool Unlocked, int Levels)>
+        {
+            [1] = (true, 0),
+            [2] = (true, 1),
+            [10] = (true, 0),
+        };
+        var migrated = UnlockBaseline.MigrateEmberTreeBaseline(new[] { 1, 2, 10 }, current);
+        Assert.Equal(new[] { 2 }, migrated.Keys.OrderBy(id => id));
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(2, true, 1, migrated));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 1, migrated));
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(10, true, 1, migrated));
+    }
+
+    // The game's purchase call (SavedPlayerSlot.UnlockEmberTreeUpgade) is the purchase, so no baseline is involved.
+    // Observed in the live log: a node is locked ("-") before the call and unlocked ("U") right after it, at level 1
+    // both times, so the level cannot tell a bought node from a free one and the unlocked flag change is the signal.
+
+    [Fact]
+    public void ACallThatUnlocksALockedNodeIsAPurchase()
+    {
+        Assert.True(UnlockBaseline.IsEmberTreePurchase(unlockedAfterCall: true, alreadyUnlockedBefore: false));
+    }
+
+    [Fact]
+    public void ACallThatLeavesTheNodeLockedIsNotAPurchase()
+    {
+        // A refused purchase (not enough ember, stage not open) must not send a check.
+        Assert.False(UnlockBaseline.IsEmberTreePurchase(unlockedAfterCall: false, alreadyUnlockedBefore: false));
+    }
+
+    [Fact]
+    public void ACallForANodeThatWasAlreadyUnlockedIsNotAPurchase()
+    {
+        Assert.False(UnlockBaseline.IsEmberTreePurchase(unlockedAfterCall: true, alreadyUnlockedBefore: true));
+    }
+
+    [Fact]
+    public void ABoughtNodeIsReportedEvenWhenAnEarlierSnapshotAlreadyHeldIt()
+    {
+        // This is the bug from the oreo3 seed. The first scan ran after Thick Skin (level 6) and four others were
+        // already unlocked, so the old snapshot rule excluded them for good and their purchases never sent a check.
+        // The purchase call does not look at any snapshot: locked before, unlocked after is a purchase.
+        var snapshotTakenLate = new Dictionary<int, int> { [1] = 6, [4] = 1, [9] = 1, [10] = 1, [12] = 1, [17] = 1 };
+        foreach (var id in snapshotTakenLate.Keys)
+        {
+            // The old rule would have refused all of these.
+            Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(id, true, snapshotTakenLate[id], snapshotTakenLate));
+            // The purchase rule does not consult the snapshot at all.
+            Assert.True(UnlockBaseline.IsEmberTreePurchase(unlockedAfterCall: true, alreadyUnlockedBefore: false));
+        }
+    }
+
+    [Fact]
+    public void BuyingTheSameNodeTwiceReportsOnlyTheFirstPurchase()
+    {
+        var unlocked = false;
+        var reports = 0;
+        for (var call = 0; call < 3; call++)
+        {
+            var before = unlocked;
+            unlocked = true; // the game unlocks the node on the first call and leaves it unlocked
+            if (UnlockBaseline.IsEmberTreePurchase(unlocked, before))
+                reports++;
+        }
+        Assert.Equal(1, reports);
+    }
+
+    [Fact]
+    public void MigratingKeepsAnAlreadyBoughtFreeNodeExcludedSoItIsNotReportedTwice()
+    {
+        var current = new Dictionary<int, (bool Unlocked, int Levels)> { [1] = (true, 3) };
+        var migrated = UnlockBaseline.MigrateEmberTreeBaseline(new[] { 1 }, current);
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 3, migrated));
+    }
+
     [Fact]
     public void ABrandNewSeedIsNotConsideredAsAlreadyRun()
     {
@@ -1569,6 +1809,38 @@ public class UnlockBaselineTests
         Assert.True(back.BaselineTaken);
         Assert.Equal(FreshSaveNodes, back.BaselineEmberTree.ToArray());
         Assert.Equal(new[] { 3, 9 }, back.BaselineWeaponMods.ToArray());
+    }
+
+    [Fact]
+    public void TheEmberTreeLevelBaselineSurvivesASaveAndLoadRoundTrip()
+    {
+        var state = new SessionState { Seed = "abc", BaselineTaken = true, EmberTreeLevelBaselineTaken = true };
+        state.BaselineEmberTreeLevels[2] = 1;
+        state.BaselineEmberTreeLevels[7] = 3;
+        var json = System.Text.Json.JsonSerializer.Serialize(state);
+        var back = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json)!;
+        Assert.True(back.EmberTreeLevelBaselineTaken);
+        Assert.Equal(1, back.BaselineEmberTreeLevels[2]);
+        Assert.Equal(3, back.BaselineEmberTreeLevels[7]);
+    }
+
+    [Fact]
+    public void AnOldStateFileWithOnlyTheIdListNeedsTheLevelMigration()
+    {
+        const string json = "{\"Version\":1,\"Seed\":\"1\",\"SlotName\":\"p\",\"BaselineTaken\":true,\"BaselineEmberTree\":[1,10],\"BaselineWeaponMods\":[]}";
+        var state = System.Text.Json.JsonSerializer.Deserialize<SessionState>(json)!;
+        Assert.True(state.BaselineTaken);
+        Assert.False(state.EmberTreeLevelBaselineTaken);
+        Assert.Empty(state.BaselineEmberTreeLevels);
+        Assert.Equal(new[] { 1, 10 }, state.BaselineEmberTree.ToArray());
+    }
+
+    [Fact]
+    public void ASeedWithoutABaselineReportsEveryBoughtNode()
+    {
+        var empty = new Dictionary<int, int>();
+        Assert.True(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 1, empty));
+        Assert.False(UnlockBaseline.ShouldReportEmberTreeNode(1, true, 0, empty));
     }
 
     [Fact]
@@ -2767,5 +3039,175 @@ public class GoalPolicyTests
         };
         foreach (var ((defeated, goal), completes) in expected)
             Assert.Equal(completes, GoalPolicy.Completes(defeated, goal));
+    }
+}
+
+public class SessionStateStoreTests : IDisposable
+{
+    private readonly string directory = Path.Combine(Path.GetTempPath(), "ek_state_test_" + Guid.NewGuid().ToString("N"));
+    private SessionStateStore Store => new(directory);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(directory))
+            Directory.Delete(directory, true);
+    }
+
+    private static SessionState Progress(string seed, string slot, int items, int team = 0) => new()
+    {
+        Seed = seed,
+        SlotName = slot,
+        Team = team,
+        NextItemIndex = items,
+        BaselineTaken = true,
+        EmberTreeLevelBaselineTaken = true,
+    };
+
+    [Fact]
+    public void ANewSessionStartsEmptyAndRemembersItsIdentity()
+    {
+        var state = Store.Load("seedA", 0, "oreo");
+        Assert.Equal("seedA", state.Seed);
+        Assert.Equal("oreo", state.SlotName);
+        Assert.Equal(0, state.Team);
+        Assert.Equal(0, state.NextItemIndex);
+        Assert.False(state.BaselineTaken);
+    }
+
+    [Fact]
+    public void ProgressSurvivesASaveAndLoad()
+    {
+        var store = Store;
+        var state = Progress("seedA", "oreo", 12);
+        state.PendingChecks.Add(77);
+        store.Save(state);
+
+        var back = Store.Load("seedA", 0, "oreo");
+        Assert.Equal(12, back.NextItemIndex);
+        Assert.True(back.BaselineTaken);
+        Assert.Equal(new long[] { 77 }, back.PendingChecks.ToArray());
+    }
+
+    [Fact]
+    public void TheSameSlotNameInAnotherRoomDoesNotTouchTheFirstRoom()
+    {
+        var store = Store;
+        store.Save(Progress("seedA", "oreo", 20));
+
+        var other = store.Load("seedB", 0, "oreo");
+        Assert.Equal(0, other.NextItemIndex);
+        Assert.False(other.BaselineTaken);
+        other.NextItemIndex = 3;
+        store.Save(other);
+
+        Assert.Equal(20, store.Load("seedA", 0, "oreo").NextItemIndex);
+        Assert.Equal(3, store.Load("seedB", 0, "oreo").NextItemIndex);
+    }
+
+    [Fact]
+    public void ReturningToAnEarlierRoomRestoresItsProgress()
+    {
+        var store = Store;
+        var first = Progress("seedA", "oreo", 20);
+        first.BaselineEmberTreeLevels[2] = 1;
+        store.Save(first);
+        store.Save(Progress("seedB", "oreo", 5));
+
+        var back = store.Load("seedA", 0, "oreo");
+        Assert.Equal(20, back.NextItemIndex);
+        Assert.True(back.BaselineTaken);
+        Assert.Equal(1, back.BaselineEmberTreeLevels[2]);
+    }
+
+    [Fact]
+    public void TheTeamIsPartOfTheIdentity()
+    {
+        var store = Store;
+        store.Save(Progress("seedA", "oreo", 9, team: 0));
+        Assert.Equal(0, store.Load("seedA", 1, "oreo").NextItemIndex);
+        Assert.Equal(9, store.Load("seedA", 0, "oreo").NextItemIndex);
+    }
+
+    [Fact]
+    public void TheSlotNameIsNotCaseSensitiveButTheSeedIs()
+    {
+        var store = Store;
+        store.Save(Progress("seedA", "Oreo", 4));
+        Assert.Equal(4, store.Load("seedA", 0, "oreo").NextItemIndex);
+        Assert.Equal(0, store.Load("SEEDA", 0, "oreo").NextItemIndex);
+    }
+
+    [Fact]
+    public void TheFileNameDoesNotDependOnAnyHostOrPort()
+    {
+        var store = Store;
+        Assert.Equal(store.GetPath("seedA", 0, "oreo"), store.GetPath("seedA", 0, "oreo"));
+        Assert.NotEqual(store.GetPath("seedA", 0, "oreo"), store.GetPath("seedB", 0, "oreo"));
+        Assert.NotEqual(store.GetPath("seedA", 0, "oreo"), store.GetPath("seedA", 0, "oreo2"));
+    }
+
+    [Fact]
+    public void ALegacyFileForTheSameSeedIsAdoptedAndKept()
+    {
+        var store = Store;
+        Directory.CreateDirectory(Path.Combine(directory, "state"));
+        var legacyPath = store.GetLegacyPath("oreo");
+        var legacy = Progress("seedA", "oreo", 17);
+        legacy.PendingChecks.Add(5);
+        File.WriteAllText(legacyPath, System.Text.Json.JsonSerializer.Serialize(legacy));
+
+        var adopted = store.Load("seedA", 0, "oreo");
+        Assert.Equal(17, adopted.NextItemIndex);
+        Assert.Equal(new long[] { 5 }, adopted.PendingChecks.ToArray());
+        Assert.True(File.Exists(store.GetPath("seedA", 0, "oreo")));
+        Assert.True(File.Exists(legacyPath));
+    }
+
+    [Fact]
+    public void ALegacyFileForAnotherSeedIsIgnoredAndLeftAlone()
+    {
+        var store = Store;
+        Directory.CreateDirectory(Path.Combine(directory, "state"));
+        var legacyPath = store.GetLegacyPath("oreo");
+        File.WriteAllText(legacyPath, System.Text.Json.JsonSerializer.Serialize(Progress("seedOld", "oreo", 17)));
+        var before = File.ReadAllText(legacyPath);
+
+        var fresh = store.Load("seedNew", 0, "oreo");
+        Assert.Equal(0, fresh.NextItemIndex);
+        Assert.False(fresh.BaselineTaken);
+        Assert.Equal(before, File.ReadAllText(legacyPath));
+        Assert.False(File.Exists(store.GetPath("seedNew", 0, "oreo")));
+    }
+
+    [Fact]
+    public void ALegacyFileThatCannotBeReadIsIgnoredInsteadOfBlockingTheConnection()
+    {
+        var store = Store;
+        Directory.CreateDirectory(Path.Combine(directory, "state"));
+        File.WriteAllText(store.GetLegacyPath("oreo"), "{ not json");
+        var fresh = store.Load("seedA", 0, "oreo");
+        Assert.Equal(0, fresh.NextItemIndex);
+    }
+
+    [Fact]
+    public void ACorruptFileForTheSessionStillBlocksInsteadOfSilentlyResetting()
+    {
+        var store = Store;
+        Directory.CreateDirectory(Path.Combine(directory, "state"));
+        File.WriteAllText(store.GetPath("seedA", 0, "oreo"), "{ not json");
+        Assert.Throws<InvalidDataException>(() => store.Load("seedA", 0, "oreo"));
+    }
+
+    [Fact]
+    public void AMigratedFileIsNotMigratedAgainOverNewerProgress()
+    {
+        var store = Store;
+        Directory.CreateDirectory(Path.Combine(directory, "state"));
+        File.WriteAllText(store.GetLegacyPath("oreo"), System.Text.Json.JsonSerializer.Serialize(Progress("seedA", "oreo", 10)));
+        var adopted = store.Load("seedA", 0, "oreo");
+        adopted.NextItemIndex = 25;
+        store.Save(adopted);
+
+        Assert.Equal(25, store.Load("seedA", 0, "oreo").NextItemIndex);
     }
 }

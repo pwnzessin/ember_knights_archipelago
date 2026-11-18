@@ -19,13 +19,15 @@ internal static class UpgradeTooltipText
         var catalog = GameCatalog.Data;
         if (catalog.LocationForEmberTreeNode(nodeDefId) is not { } locationId)
             return;
-        // Only reveal what a node holds while it can actually be bought: not already unlocked, and its stage open.
-        if (!CanUnlockNow(nodeDefId))
+        // Only reveal what a node holds while it can actually be bought (not bought yet, stage open), or once its
+        // check has been sent, when the item is no longer a surprise and the line reads "(sent)".
+        var sent = service.IsLocationSent(locationId);
+        if (!UpgradeTooltip.ShouldShowEmberTreeLine(sent, CanUnlockNow(nodeDefId)))
             return;
         var line = UpgradeTooltip.Format(
             catalog.GetLocationName(locationId),
             service.ScoutedItemForEmberTreeNode(nodeDefId),
-            service.IsLocationSent(locationId));
+            sent);
         descLabel.text = UpgradeTooltip.Append(descLabel.text, line);
     }
 
@@ -47,10 +49,12 @@ internal static class UpgradeTooltipText
             for (var i = 0; i < levels.Count; i++)
                 thresholds.Add(levels[i]);
 
+            // A node the game gave for free (Thick Skin, Slayer) is unlocked at level 0, so it still holds a check
+            // until its first level is bought. "Bought" therefore means unlocked with at least one level.
             var data = saveSlot.GetEmberTreeUpgradeData(nodeDefId);
-            var unlocked = data is not null && data.Unlocked;
+            var bought = data is not null && UnlockBaseline.IsEmberTreeNodePurchased(data.Unlocked, data.Level);
             return UpgradeTooltip.CanUnlockEmberTreeNode(
-                unlocked, def.UnlockStage, saveSlot.GetNumberOfEmberTreeUpgrades(), thresholds);
+                bought, def.UnlockStage, saveSlot.GetNumberOfEmberTreeUpgrades(), thresholds);
         }
         catch (Exception exception)
         {

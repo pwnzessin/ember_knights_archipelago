@@ -450,5 +450,5 @@ class EmberKnightsWorld(World):
         else:
             slot_data["heat_mode"] = "random_assortment"
         slot_data["goal"] = "arch_praxis" if self.options.goal == Goal.option_arch_praxis else "praxis"
-        slot_data["mod_version"] = "1.6.2"
+        slot_data["mod_version"] = "1.6.3"
         return slot_data

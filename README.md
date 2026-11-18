@@ -62,7 +62,7 @@ If the installer cannot find your game, run it from a Command Prompt with `Insta
 
 Set `auto_connect = true` in the config if you want it to connect by itself a few seconds after the game starts.
 
-Use a fresh save for a new seed. On the first connect of a new seed, anything already unlocked in the save (such as the Ember Tree nodes a fresh save starts with) is recorded and is not sent as a check.
+Use a fresh save for a new seed. Every Ember Tree node sends its check at the moment you buy it, whatever the save already held, so nothing you buy can be missed. On the first connect of a new seed, every weapon mod that is already unlocked is recorded and is not sent as a check.
 
 ## What the mod does
 
@@ -70,8 +70,8 @@ Use a fresh save for a new seed. On the first connect of a new seed, anything al
 - **Items:** skills, relics, weapons, Heat Reduction, Archipelago Coins, Ash and traps.
 - **Ember Tree:** upgrades cost Archipelago Coins, and normal run Ember no longer feeds the tree while connected.
 - **Reverse Heat:** difficulty starts high and is lowered by Heat Reduction items (see the heat options below).
-- **Relic orbs:** the check is sent the moment you pick up the orb. You still hand the orb to Esper, and her reveal shows what that orb's location really holds. If it is one of your relics you see that relic. If it is anything else, the overlay names the item and the player it is for.
-- **Tooltips:** Ember Tree and Ash upgrades show an `AP:` line naming the item the check holds. On Ember Tree nodes it only appears while the node can be unlocked.
+- **Relic orbs:** the check is sent the moment you take the orb, whether you pick it up yourself or leave it on the ground and let the game pull it to you when you leave the room. You still hand the orb to Esper, and her reveal shows what that orb's location really holds. If it is one of your relics you see that relic. If it is anything else, the overlay names the item and the player it is for.
+- **Tooltips:** Ember Tree and Ash upgrades show an `AP:` line naming the item the check holds. On Ember Tree nodes it appears while the node can be bought, and stays after you buy it with a `(sent)` mark once its check has been sent.
 - **Starting skills:** the seven standard skills and the ten tablet skills (with the DLC, its ten tablet skills too) form one pool of 17 (27 with the DLC). You start with a random number of them (see `starting_skills`), and every other skill is an item in the multiworld. The tablets stay checks either way, so a tablet sends its location whichever skills you started with. Seeds generated before this option existed keep working: they only ever gated the standard skills.
 - **Starting relics:** the base game gives every new save 43 ordinary relics for free (Bone Plate, Meteor, Magic Tome and others), and the other 53 come from relic orbs. All of them form one pool (with the DLC, the ten DLC orb relics join it too). You start with a random number of them (see `starting_relics`), and every other relic is an item in the multiworld. The orb checks do not change, and the 43 formerly free relics add items only, no new locations. At least seven of your starting relics are always Common relics that need no category to appear, so the first relic selects have several relics to rotate through instead of repeating the same few. Seeds generated before this option existed keep those 43 relics unlocked.
 - **Short relic selects:** a relic select (the "pick one of three" screen) rolls each card as Common about 84% of the time and only offers relics you could have, so a player who owns few relics can get one or two cards. While connected, a select that comes out short is topped up to three with relics you own that passed every one of the game's own checks. A select the game already filled is never touched. Turn it off with `fill_short_relic_selectors`.
@@ -183,7 +183,7 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 ## Known issues
 
 - **Ash from an item:** your Ash total updates (you can see it when buying), but the Ash number in the top-left HUD does not until the game refreshes it.
-- **Seeds that ran before this change:** a seed that had already received items before the unlock baseline existed keeps reporting every unlocked Ember Tree node and weapon mod. A new seed records what is already unlocked on its first connect (for example the five Ember Tree nodes a fresh save starts with) and never reports those as checks.
+- **Seeds that ran before this change:** a seed that had already received items before the unlock baseline existed keeps reporting every unlocked weapon mod. A new seed records the weapon mods that are already unlocked on its first connect and never reports those as checks. Ember Tree nodes are not judged from a baseline any more: each one is sent when you buy it, so a node bought before the mod first looked at the save, or one the game unlocks for free, can no longer be missed.
 - **Starting skills:** gated standard skills in the Nexus shop and the in-run skill selector are untested.
 - **Starting relics:** the first relic select was checked in a real run and only offered starting relics. Relics sold in shops other than the first one rely on the same unlock check, but were not looked at in play.
 - **First shop:** the change that rolls the two scripted relic slots normally is new and was not yet checked in a real run. If Bone Plate or Tainted Conduit still show up in your first shop, please send `BepInEx/LogOutput.log`.
@@ -199,7 +199,7 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 - **It will not connect.** Check `host`, `port` and `slot_name` in the config. The slot name must match your YAML exactly. The overlay shows the reason on connect failure.
 - **Wrong or missing items.** Check that the APWorld you generated with and the plugin are both the newest versions, and generate a new seed.
 - **Game or BepInEx errors.** Send `BepInEx/LogOutput.log`. It is the first thing to look at.
-- Your per-slot progress is stored in `BepInEx/plugins/EmberKnights.Archipelago/state/`. Do not share or commit it.
+- Your progress is stored in `BepInEx/plugins/EmberKnights.Archipelago/state/`, one small file per multiworld session. A session is identified the way the Archipelago reference client identifies it: the room's seed name, your team and your slot name. Using the same slot name in a different room starts a fresh session and leaves the first room's progress alone, and returning to the first room picks it up again. The host and port are not part of that identity, so a room that moves to a new port keeps its progress. Do not share or commit these files.
 
 ## Build from source
 

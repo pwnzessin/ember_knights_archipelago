@@ -34,28 +34,40 @@ internal static class SkillTabletPickupPatch
     }
 }
 
-[HarmonyPatch(typeof(GameCode.PlayerUtils), "PickupUnknownRelicDrop")]
+/// <summary>
+/// Sends the "Relic Orb N" check when the player takes an orb, however the orb reaches them.
+///
+/// This used to hook <c>PlayerUtils.PickupUnknownRelicDrop</c>, which only runs for an orb picked up by hand. An orb
+/// left on the ground is pulled to the player by the room-clear sequence (<c>CollectImportantItems</c>), which never
+/// calls it, so that check was lost. <c>XGameState.AddUnknownRelicCollected</c> is reached on both paths, but it is
+/// called twice per orb (once when the orb spawns, once when it is taken); <see cref="OrbCollectionTracker"/> tells the
+/// two apart, so the check goes out exactly once, on the pickup.
+///
+/// The orb itself still goes into the save's pending list (nothing suppresses that), so Esper can identify it later.
+/// Only the 53 base-game orbs and, with the DLC on, the 10 DLC orbs are randomized; any other relic keeps vanilla
+/// behavior.
+/// </summary>
+[HarmonyPatch(typeof(GameCode.XGameState), nameof(GameCode.XGameState.AddUnknownRelicCollected))]
 internal static class RelicOrbPickupPatch
 {
-    private static readonly HashSet<IntPtr> ConsumedDrops = new();
+    private static readonly OrbCollectionTracker Tracker = new();
+
+    /// <summary>Forgets what was seen, so a new connection or run starts clean.</summary>
+    public static void Reset() => Tracker.Reset();
 
     [HarmonyPostfix]
-    private static void Postfix(GameCode.XEntity DropENT, GameCode.XDropCMP DropCMP, bool __result)
+    private static void Postfix(int __0, bool __result)
     {
         try
         {
             var service = ArchipelagoPlugin.Instance.Service;
-            // Only the 53 base-game orbs are randomized; DLC orbs and anything else keep vanilla behavior.
-            // The check is sent the moment the orb is picked up. The orb itself still goes into the save's pending
-            // list (nothing suppresses that), so Esper can identify it later.
-            if (!__result || !service.IsActive || DropCMP is null)
+            if (!service.IsActive)
                 return;
-            var relicDefId = DropCMP.UnknownRelicDefId;
-            var isBaseOrb = GameCatalog.Data.IsOrbRelic(relicDefId);
-            var isDlcOrb = service.DlcActive && GameCatalog.Data.IsDlcOrbRelic(relicDefId);
+            var isBaseOrb = GameCatalog.Data.IsOrbRelic(__0);
+            var isDlcOrb = service.DlcActive && GameCatalog.Data.IsDlcOrbRelic(__0);
             if (!isBaseOrb && !isDlcOrb)
                 return;
-            if (DropENT is not null && !ConsumedDrops.Add(DropENT.Pointer))
+            if (!Tracker.IsPickup(__0, __result))
                 return;
             if (isBaseOrb)
                 service.CollectRelicOrb();
@@ -64,7 +76,7 @@ internal static class RelicOrbPickupPatch
         }
         catch (Exception exception)
         {
-            PatchSafety.Report("PickupUnknownRelicDrop", exception);
+            PatchSafety.Report("AddUnknownRelicCollected", exception);
         }
     }
 }

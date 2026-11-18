@@ -48,6 +48,13 @@ internal static class UpgradeTooltip
         return upgradesInvested >= stageThresholds[unlockStage - 1];
     }
 
+    /// <summary>
+    /// Whether an Ember Tree node's tooltip gets the <c>AP:</c> line. It shows while the node can be bought, so a player
+    /// can see what it holds before paying, and it keeps showing once the check has been sent, so a bought node still
+    /// names the item it sent (with the "(sent)" mark). A locked node whose check has not been sent stays hidden.
+    /// </summary>
+    public static bool ShouldShowEmberTreeLine(bool checkSent, bool canUnlockNow) => checkSent || canUnlockNow;
+
     /// <summary>Appends the line to the game's own description, keeping the original text intact.</summary>
     public static string Append(string? originalDescription, string line)
     {

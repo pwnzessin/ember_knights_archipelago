@@ -9,6 +9,9 @@ public sealed class SessionState
     public int Version { get; set; } = 1;
     public string Seed { get; set; } = "";
     public string SlotName { get; set; } = "";
+
+    /// <summary>The team of the session, the third part of its identity. Zero for files written before teams were kept.</summary>
+    public int Team { get; set; }
     public int NextItemIndex { get; set; }
 
     /// <summary>How many relic orbs have been collected; the next orb is "Relic Orb (value + 1)".</summary>
@@ -28,8 +31,21 @@ public sealed class SessionState
     /// <summary>True for a seed that had already run when the baseline was introduced; it is never given one.</summary>
     public bool BaselineSkipped { get; set; }
 
-    /// <summary>Ember Tree node ids that were already unlocked at first connect and are not checks.</summary>
+    /// <summary>
+    /// Legacy Ember Tree baseline: every node that was merely unlocked at first connect, including the free Thick Skin
+    /// and Slayer. Kept only so old state files load and can be migrated into <see cref="BaselineEmberTreeLevels"/>.
+    /// </summary>
     public List<int> BaselineEmberTree { get; set; } = new();
+
+    /// <summary>
+    /// Ember Tree nodes that were already bought (unlocked with at least one level) at first connect and are not checks,
+    /// with the level each had. A node the game gives for free sits at level 0 and is not listed, so buying its first
+    /// level is reported like any other node.
+    /// </summary>
+    public Dictionary<int, int> BaselineEmberTreeLevels { get; set; } = new();
+
+    /// <summary>True once <see cref="BaselineEmberTree"/> has been converted into <see cref="BaselineEmberTreeLevels"/>.</summary>
+    public bool EmberTreeLevelBaselineTaken { get; set; }
 
     /// <summary>Weapon mod ids that were already unlocked at first connect and are not checks.</summary>
     public List<int> BaselineWeaponMods { get; set; } = new();
@@ -64,12 +80,75 @@ public sealed class SessionStateStore
         stateDirectory = Path.Combine(pluginDirectory, "state");
     }
 
-    public SessionState Load(string slotName)
+    /// <summary>
+    /// Loads the state of one multiworld session. A session is identified the way the Archipelago reference client
+    /// identifies it: the server's <c>seed_name</c>, the team and the slot. Two rooms never share a file, so connecting
+    /// to a different room with the same slot name leaves the first room's progress (item index, pending checks and
+    /// unlock baseline) untouched, and returning to it restores that progress. The host and port are deliberately not
+    /// part of the identity: a room that moves to another port is still the same session.
+    /// </summary>
+    public SessionState Load(string seed, int team, string slotName)
     {
-        var path = GetPath(slotName);
+        var path = GetPath(seed, team, slotName);
         if (!File.Exists(path))
-            return new SessionState { SlotName = slotName };
+        {
+            var migrated = TryMigrateLegacy(seed, team, slotName, path);
+            if (migrated is null)
+                return new SessionState { SlotName = slotName, Seed = seed, Team = team };
+            return migrated;
+        }
 
+        var state = Read(path);
+        state.SlotName = slotName;
+        state.Seed = seed;
+        state.Team = team;
+        return state;
+    }
+
+    public void Save(SessionState state)
+    {
+        Directory.CreateDirectory(stateDirectory);
+        var path = GetPath(state.Seed, state.Team, state.SlotName);
+        var temporaryPath = path + ".tmp";
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
+        File.Copy(temporaryPath, path, true);
+        File.Delete(temporaryPath);
+    }
+
+    /// <summary>
+    /// Earlier versions kept one file per slot name, whatever room it belonged to. When the file for this session does
+    /// not exist yet, a legacy file for the same slot name is adopted only if it was written for this very seed, so a
+    /// session that was already running keeps its progress. The legacy file is copied, not moved, and is never touched
+    /// again; a file from another seed is ignored.
+    /// </summary>
+    private SessionState? TryMigrateLegacy(string seed, int team, string slotName, string newPath)
+    {
+        var legacyPath = GetLegacyPath(slotName);
+        if (!File.Exists(legacyPath))
+            return null;
+
+        SessionState legacy;
+        try
+        {
+            legacy = Read(legacyPath);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+        if (!string.Equals(legacy.Seed, seed, StringComparison.Ordinal))
+            return null;
+
+        legacy.SlotName = slotName;
+        legacy.Seed = seed;
+        legacy.Team = team;
+        Directory.CreateDirectory(stateDirectory);
+        File.WriteAllText(newPath, JsonSerializer.Serialize(legacy, JsonOptions));
+        return legacy;
+    }
+
+    private static SessionState Read(string path)
+    {
         try
         {
             var state = JsonSerializer.Deserialize<SessionState>(File.ReadAllText(path), JsonOptions);
@@ -77,7 +156,8 @@ public sealed class SessionStateStore
                 throw new InvalidDataException("Unsupported Archipelago session-state format.");
             state.PendingChecks ??= new List<long>();
             state.PendingFillers ??= new List<long>();
-            state.SlotName = slotName;
+            state.BaselineEmberTree ??= new List<int>();
+            state.BaselineEmberTreeLevels ??= new Dictionary<int, int>();
             return state;
         }
         catch (Exception exception) when (exception is JsonException or IOException or InvalidDataException)
@@ -87,17 +167,16 @@ public sealed class SessionStateStore
         }
     }
 
-    public void Save(SessionState state)
+    /// <summary>The file name for a session: a hash of the seed, the team and the slot name.</summary>
+    public string GetPath(string seed, int team, string slotName)
     {
-        Directory.CreateDirectory(stateDirectory);
-        var path = GetPath(state.SlotName);
-        var temporaryPath = path + ".tmp";
-        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
-        File.Copy(temporaryPath, path, true);
-        File.Delete(temporaryPath);
+        var key = $"{seed.Trim()}|{team}|{slotName.Trim().ToLowerInvariant()}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        return Path.Combine(stateDirectory, $"{Convert.ToHexString(hash)[..16]}.json");
     }
 
-    private string GetPath(string slotName)
+    /// <summary>The file name earlier versions used: a hash of the slot name alone.</summary>
+    public string GetLegacyPath(string slotName)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(slotName.Trim().ToLowerInvariant()));
         return Path.Combine(stateDirectory, $"{Convert.ToHexString(hash)[..16]}.json");
