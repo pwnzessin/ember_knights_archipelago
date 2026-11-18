@@ -679,6 +679,199 @@ public class RelicOrbPolicyTests
 
     private static readonly CatalogData Catalog = GameCatalog.Data;
 }
+public class PraxisHandStopPolicyTests
+{
+    // The hand effect keeps spawning projectiles while it is ticked, even with its hands gone, so the mod stops it when the
+    // room leaves the fight. A short grace period keeps a one-frame state flicker from ending it early.
+
+    [Fact]
+    public void ItNeverStopsWhileTheRoomIsStillInTheFight()
+    {
+        var leftAt = -1f;
+        for (var t = 0f; t < 60f; t += 0.5f)
+            Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(true, t, ref leftAt));
+        Assert.Equal(-1f, leftAt);
+    }
+
+    [Fact]
+    public void ItStopsOnlyAfterTheRoomHasStayedOutsideTheFightForTheGracePeriod()
+    {
+        var leftAt = -1f;
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 10.0f, ref leftAt));
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 10.3f, ref leftAt));
+        Assert.True(PraxisHandStopPolicy.ShouldStopForRoomState(false, 10.5f, ref leftAt));
+    }
+
+    [Fact]
+    public void AOneFrameFlickerOutsideTheFightDoesNotStopIt()
+    {
+        var leftAt = -1f;
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 10.00f, ref leftAt));
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(true, 10.02f, ref leftAt));
+        Assert.Equal(-1f, leftAt);
+        // The room leaves again much later: the grace period starts over from this moment, not from the first flicker.
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 20.00f, ref leftAt));
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 20.30f, ref leftAt));
+        Assert.True(PraxisHandStopPolicy.ShouldStopForRoomState(false, 20.50f, ref leftAt));
+    }
+
+    [Fact]
+    public void TheClockGoingBackwardsRestartsTheGracePeriodInsteadOfStoppingAtOnce()
+    {
+        var leftAt = 500f;
+        Assert.False(PraxisHandStopPolicy.ShouldStopForRoomState(false, 1f, ref leftAt));
+        Assert.Equal(1f, leftAt);
+    }
+
+    [Fact]
+    public void TheGracePeriodIsShortEnoughToStopTheProjectilesPromptly()
+    {
+        Assert.InRange(PraxisHandStopPolicy.GraceSeconds, 0.1f, 1.5f);
+    }
+}
+
+public class TrapBossWatchTests
+{
+    // The trap's miniboss is never given the game's death handling, so the mod checks its health on a timer.
+
+    [Fact]
+    public void TheFirstCheckIsAlwaysDue()
+    {
+        Assert.True(TrapBossWatch.IsDue(now: 10f, lastCheckAt: -1f));
+    }
+
+    [Theory]
+    [InlineData(10.00f, 10.00f, false)]
+    [InlineData(10.20f, 10.00f, false)]
+    [InlineData(10.25f, 10.00f, true)]
+    [InlineData(11.00f, 10.00f, true)]
+    public void ACheckIsDueOnlyOnceTheIntervalHasPassed(float now, float last, bool expected)
+    {
+        Assert.Equal(expected, TrapBossWatch.IsDue(now, last));
+    }
+
+    [Fact]
+    public void TheClockGoingBackwardsStillCountsAsDue()
+    {
+        // A scene reload can reset the clock; the watch must not stall waiting for it to catch up.
+        Assert.True(TrapBossWatch.IsDue(now: 1f, lastCheckAt: 500f));
+    }
+
+    [Fact]
+    public void TheIntervalIsLongerThanAFrameButShorterThanAnyoneNotices()
+    {
+        Assert.InRange(TrapBossWatch.CheckIntervalSeconds, 0.1f, 0.5f);
+    }
+
+    [Theory]
+    [InlineData(0f, true)]
+    [InlineData(-5f, true)]
+    [InlineData(0.01f, false)]
+    [InlineData(1200f, false)]
+    public void OnlyZeroOrLessHealthIsDead(float hp, bool dead)
+    {
+        Assert.Equal(dead, TrapBossWatch.IsDead(hp));
+    }
+
+    [Fact]
+    public void AFailedHealthReadNeverRemovesALivingBoss()
+    {
+        Assert.False(TrapBossWatch.IsDead(float.NaN));
+    }
+
+    [Fact]
+    public void SnapshotLetsACallerRemoveWhileWalking()
+    {
+        var tracker = new TrapBossTracker();
+        tracker.Track(new IntPtr(0x1000));
+        tracker.Track(new IntPtr(0x2000));
+        foreach (var entity in tracker.Snapshot())
+            Assert.True(tracker.TakeIfTracked(entity));
+        Assert.Equal(0, tracker.Count);
+    }
+}
+
+public class TrapBossTrackerTests
+{
+    // The Boss Ambush Trap's miniboss skips the game's miniboss fight, so nothing removes its body when it dies. The
+    // tracker is how the mod knows an enemy that just died is one of the trap's own, and never anything else.
+
+    [Fact]
+    public void ATrackedEnemyIsReportedOnceAtItsDeath()
+    {
+        var tracker = new TrapBossTracker();
+        var miniboss = new IntPtr(0x1000);
+        tracker.Track(miniboss);
+        Assert.True(tracker.TakeIfTracked(miniboss));
+        Assert.False(tracker.TakeIfTracked(miniboss));
+    }
+
+    [Fact]
+    public void AnEnemyTheTrapDidNotSpawnIsNeverReported()
+    {
+        var tracker = new TrapBossTracker();
+        tracker.Track(new IntPtr(0x1000));
+        Assert.False(tracker.TakeIfTracked(new IntPtr(0x2000)));
+        Assert.Equal(1, tracker.Count);
+    }
+
+    [Fact]
+    public void ADeathBeforeAnythingWasTrackedIsIgnored()
+    {
+        var tracker = new TrapBossTracker();
+        Assert.False(tracker.TakeIfTracked(new IntPtr(0x1000)));
+    }
+
+    [Fact]
+    public void SeveralTrapMinibossesAreTrackedIndependently()
+    {
+        var tracker = new TrapBossTracker();
+        var a = new IntPtr(0x1000);
+        var b = new IntPtr(0x2000);
+        tracker.Track(a);
+        tracker.Track(b);
+        Assert.True(tracker.TakeIfTracked(b));
+        Assert.Equal(1, tracker.Count);
+        Assert.True(tracker.TakeIfTracked(a));
+        Assert.Equal(0, tracker.Count);
+    }
+
+    [Fact]
+    public void ANullEntityIsNeverTrackedOrReported()
+    {
+        // SpawnEnemy can return null when the spawn fails; that must not make every null death look like ours.
+        var tracker = new TrapBossTracker();
+        tracker.Track(IntPtr.Zero);
+        Assert.Equal(0, tracker.Count);
+        Assert.False(tracker.TakeIfTracked(IntPtr.Zero));
+    }
+
+    [Fact]
+    public void ClearForgetsEveryEntity()
+    {
+        var tracker = new TrapBossTracker();
+        tracker.Track(new IntPtr(0x1000));
+        tracker.Clear();
+        Assert.False(tracker.TakeIfTracked(new IntPtr(0x1000)));
+    }
+
+    [Fact]
+    public void ContainsLooksWithoutForgetting()
+    {
+        // The diagnostic reads the tracker at the dead state, before the kill event removes the entity. Looking must not
+        // use up the one removal the kill event is owed.
+        var tracker = new TrapBossTracker();
+        var miniboss = new IntPtr(0x1000);
+        tracker.Track(miniboss);
+        Assert.True(tracker.Contains(miniboss));
+        Assert.True(tracker.Contains(miniboss));
+        Assert.False(tracker.Contains(new IntPtr(0x2000)));
+        Assert.False(tracker.Contains(IntPtr.Zero));
+        Assert.True(tracker.TakeIfTracked(miniboss));
+        Assert.False(tracker.Contains(miniboss));
+    }
+}
+
 public class OrbCollectionTrackerTests
 {
     // Observed in the live log, for both a manual pickup and an orb left on the ground: the game calls

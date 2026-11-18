@@ -363,6 +363,38 @@ internal static class BossKillPatch
         {
             PatchSafety.Report("DispatchEnemyKilledEvent", exception);
         }
+
+        // Kept out of the check above so a failure there can never stop the cleanup, and the other way round.
+        try
+        {
+            GameActions.RemoveDeadTrapBoss(P.World, P.EnemyEntity, P.EnemyType);
+        }
+        catch (Exception exception)
+        {
+            PatchSafety.Report("DispatchEnemyKilledEvent (trap miniboss cleanup)", exception);
+        }
+    }
+}
+
+/// <summary>
+/// Diagnostic only. Says when the game puts a tracked Boss Ambush miniboss into its dead state, which comes before the kill
+/// event. If this line appears and the kill event line does not, the kill event is not the right place to remove the body.
+/// Does nothing unless a trap miniboss is being tracked, so it is silent in normal play.
+/// </summary>
+[HarmonyPatch(typeof(GameCode.EnemyUtils), nameof(GameCode.EnemyUtils.EnterDeadState))]
+internal static class TrapBossDeadStatePatch
+{
+    [HarmonyPostfix]
+    private static void Postfix(GameCode.EnemyParams_t P)
+    {
+        try
+        {
+            GameActions.NoteTrapBossDeadState(P.EnemyEntity, P.EnemyType);
+        }
+        catch (Exception exception)
+        {
+            PatchSafety.Report("EnterDeadState (trap miniboss diagnostic)", exception);
+        }
     }
 }
 

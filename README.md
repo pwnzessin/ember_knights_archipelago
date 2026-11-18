@@ -187,7 +187,7 @@ Set `hud_log_window = true` to draw the Archipelago log on the game's own HUD in
 - **Starting skills:** gated standard skills in the Nexus shop and the in-run skill selector are untested.
 - **Starting relics:** the first relic select was checked in a real run and only offered starting relics. Relics sold in shops other than the first one rely on the same unlock check, but were not looked at in play.
 - **First shop:** the change that rolls the two scripted relic slots normally is new and was not yet checked in a real run. If Bone Plate or Tainted Conduit still show up in your first shop, please send `BepInEx/LogOutput.log`.
-- **Boss Ambush Trap:** the miniboss it spawns can stay on screen after you kill it. Leaving the room should clear it.
+- **Praxis Arena Trap:** the Slow Hands, Laser Hands and Skill Disabler effects were made to work in 1.6.4 and were tried in the Dark Forest only. Other worlds' rooms were not looked at, so an effect may still look wrong in a room layout that was not tried.
 - Co-op and online multiplayer are not tested.
 - Boss Rush and Daily Dungeon are not covered.
 - **DLC support has not been played through.** See [DLC support](#dlc-support) for exactly what was and was not checked.

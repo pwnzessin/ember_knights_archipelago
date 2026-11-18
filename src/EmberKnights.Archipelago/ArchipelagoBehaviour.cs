@@ -30,6 +30,9 @@ public sealed class ArchipelagoBehaviour : MonoBehaviour
         // Trap enemies from another world wait here for their assets, then appear. Does nothing when none are waiting.
         if (plugin.Service.IsActive)
             GameActions.TickPendingTrapSpawns();
+        // Disposes the body of a Boss Ambush miniboss or Skill Disabler beacon once it is dead. Does nothing unless one is
+        // being tracked.
+        GameActions.TickTrapBossWatch();
         TickHudWindow();
         TickTitleLabel(plugin);
         if (Input.GetKeyDown(KeyCode.F6))
